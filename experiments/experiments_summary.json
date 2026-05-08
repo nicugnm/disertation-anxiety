@@ -1,0 +1,179 @@
+{
+  "corpus_size": 13133,
+  "subreddits": 9,
+  "experiment_1": {
+    "results": [
+      {
+        "accuracy": 0.9444232965359726,
+        "precision": 0.9055472263868066,
+        "recall": 0.8791848617176128,
+        "f1": 0.8921713441654358,
+        "brier": 0.06735205465929871,
+        "support_pos": 3433,
+        "support_neg": 9700,
+        "auroc": 0.9801992827023215,
+        "auprc": 0.9547443399841363,
+        "threshold": 0.5436913940039196,
+        "ece": 0.13885883524058326,
+        "target": "anxiety",
+        "model": "TF-IDF + LogReg"
+      },
+      {
+        "accuracy": 0.9379520365435858,
+        "precision": 0.818734793187348,
+        "recall": 0.9796215429403202,
+        "f1": 0.8919814446653412,
+        "brier": 0.04396767541766167,
+        "support_pos": 3433,
+        "support_neg": 9700,
+        "auroc": 0.9863735950419426,
+        "auprc": 0.9591153527867675,
+        "threshold": 0.23778961598873138,
+        "ece": 0.028738397901943706,
+        "target": "anxiety",
+        "model": "XGBoost (linguistic)"
+      },
+      {
+        "accuracy": 0.9977160258850399,
+        "precision": 0.16666666666666666,
+        "recall": 0.5,
+        "f1": 0.25,
+        "brier": 0.000875855512358499,
+        "support_pos": 9,
+        "support_neg": 13124,
+        "auroc": 0.9693333333333333,
+        "auprc": 0.08966244725738397,
+        "threshold": 0.036116834791368936,
+        "ece": 0.010776055039302077,
+        "target": "health_anxiety",
+        "model": "TF-IDF + LogReg"
+      },
+      {
+        "accuracy": 0.9996193376475067,
+        "precision": 0.6666666666666666,
+        "recall": 1.0,
+        "f1": 0.8,
+        "brier": 0.0004058541380800307,
+        "support_pos": 9,
+        "support_neg": 13124,
+        "auroc": 0.9998095238095238,
+        "auprc": 0.8333333333333333,
+        "threshold": 0.10659901052713394,
+        "ece": 0.0006362347658702321,
+        "target": "health_anxiety",
+        "model": "XGBoost (linguistic)"
+      },
+      {
+        "accuracy": 0.9448039588884659,
+        "precision": 0.6064981949458483,
+        "recall": 0.8235294117647058,
+        "f1": 0.6985446985446986,
+        "brier": 0.06227981467756542,
+        "support_pos": 1022,
+        "support_neg": 12111,
+        "auroc": 0.9614357505280281,
+        "auprc": 0.7176392318767789,
+        "threshold": 0.45543781005186973,
+        "ece": 0.1433538993529691,
+        "target": "depression",
+        "model": "TF-IDF + LogReg"
+      },
+      {
+        "accuracy": 0.9459459459459459,
+        "precision": 0.6026490066225165,
+        "recall": 0.8921568627450981,
+        "f1": 0.7193675889328063,
+        "brier": 0.03798145055770874,
+        "support_pos": 1022,
+        "support_neg": 12111,
+        "auroc": 0.9782476754630867,
+        "auprc": 0.701316853364448,
+        "threshold": 0.3494003415107727,
+        "ece": 0.030218034888024582,
+        "target": "depression",
+        "model": "XGBoost (linguistic)"
+      },
+      {
+        "accuracy": 0.9920060905976399,
+        "precision": 0.5681818181818182,
+        "recall": 0.9259259259259259,
+        "f1": 0.704225352112676,
+        "brier": 0.010380191643530648,
+        "support_pos": 133,
+        "support_neg": 13000,
+        "auroc": 0.9959116809116809,
+        "auprc": 0.6166491103926195,
+        "threshold": 0.44586334077908796,
+        "ece": 0.05768310499172851,
+        "target": "suicidality",
+        "model": "TF-IDF + LogReg"
+      },
+      {
+        "accuracy": 0.9980966882375333,
+        "precision": 0.8666666666666667,
+        "recall": 0.9629629629629629,
+        "f1": 0.9122807017543859,
+        "brier": 0.00195805705152452,
+        "support_pos": 133,
+        "support_neg": 13000,
+        "auroc": 0.9990740740740741,
+        "auprc": 0.8535989838975873,
+        "threshold": 0.7170655131340027,
+        "ece": 0.0024402242856584834,
+        "target": "suicidality",
+        "model": "XGBoost (linguistic)"
+      }
+    ]
+  },
+  "experiment_2_transfer": [
+    {
+      "target": "anxiety",
+      "split": "in-distribution",
+      "precision": 0.9967793880837359,
+      "recall": 0.9435975609756098,
+      "f1": 0.9694596711041503,
+      "auroc": 0.9964652561794074
+    },
+    {
+      "target": "anxiety",
+      "split": "cross-subreddit",
+      "precision": 0.2128205128205128,
+      "recall": 0.8924731182795699,
+      "f1": 0.34368530020703936,
+      "auroc": 0.9664422229092949
+    }
+  ],
+  "experiment_3_subreddit_classifier": {
+    "macro_f1": 0.6480532324790172
+  },
+  "experiment_4_markers": {
+    "anxiety": {
+      "top_feature": "f_anx_term_rate",
+      "top_cohen_d": 2.4686981468044746,
+      "n_significant_bh": 22
+    },
+    "health_anxiety": {
+      "top_feature": "f_health_anx_term_rate",
+      "top_cohen_d": 16.20609337491532,
+      "n_significant_bh": 4
+    },
+    "depression": {
+      "top_feature": "f_dep_term_rate",
+      "top_cohen_d": 3.001302697139102,
+      "n_significant_bh": 19
+    },
+    "suicidality": {
+      "top_feature": "f_suic_term_rate",
+      "top_cohen_d": 7.0997033356183055,
+      "n_significant_bh": 14
+    }
+  },
+  "experiment_5_severity": {
+    "max_health_anxiety_score": 0.725,
+    "mean_by_subreddit_top3": {
+      "COVID19_support": 0.23836275093003553,
+      "Anxiety": 0.11949483390929254,
+      "AnxietyDepression": 0.08217155821713203
+    }
+  }
+}

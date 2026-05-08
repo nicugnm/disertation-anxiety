@@ -37,14 +37,18 @@ The thesis novelty: separating **health anxiety** from general anxiety as its ow
 Concrete deliverables, all working on real Reddit data as of the last commit:
 
 ### ✅ Already running on real data
-- **Collection**: 13,990 posts collected from 9 subreddits via the no-credentials JSON scraper (no Reddit API key needed). 471 unique post IDs / 413 retained per minute, deduplicated across 6 listings (top×{all,year,month,week} + new + hot).
-- **Preprocessing**: 13,990 → 13,134 posts after PII redaction (regex + spaCy NER), exact + near-dedup (SimHash), language filter, length filter.
+- **Collection**: 13,990 posts collected from 9 subreddits via the no-credentials JSON scraper (no Reddit API key needed). Deduplicated across 6 listings (top×{all,year,month,week} + new + hot).
+- **Preprocessing**: 13,990 → 13,133 posts after PII redaction (regex + spaCy NER), exact + near-dedup (SimHash), language filter, length filter.
 - **Tier-1 weak labeling**: 3,433 anxiety / 1,022 depression / 133 suicidality / 9 health-anxiety positives — health-anxiety scarcity was *expected* and motivates tier-2.
-- **TF-IDF + Logistic Regression baseline trained**: F1 **0.88**, AUROC **0.97**, AUPRC **0.94** on a 1,971-post held-out test set.
-- **Per-subreddit evaluation**: F1 0.94 on r/Anxiety, 0.70 on r/COVID19_support — visible cross-subreddit drop, exactly the RQ3 experimental signal.
-- **Linguistic-marker analysis**: 19 features compared with Mann-Whitney U + Benjamini-Hochberg FDR. `f_anx_term_rate` Cohen's d ≈ 2.5; `f_third_rate` (third-person pronouns) negatively associated as Pennebaker predicts.
-- **10 figures generated** from the real data into `docs/figures/`.
+- **8 binary classifiers trained** — TF-IDF + LogReg AND XGBoost-on-linguistic-features × 4 targets. Headline: anxiety F1 **0.89** / suicidality F1 **0.91** / depression F1 **0.72** / health-anxiety F1 **0.80** *(small-sample artifact, see caveats)*.
+- **Cross-subreddit transfer experiment (RQ3)**: in-distribution F1 = **0.969** vs cross-subreddit F1 = **0.344**, but AUROC stays at **0.966** — reveals that the *ranking* generalizes but the *threshold* doesn't.
+- **9-way subreddit classifier**: macro-F1 = **0.648** (vs random 0.11), confirming substantial linguistic distinctiveness.
+- **Per-target linguistic-marker analysis**: 4 separate Cohen's d analyses with Benjamini-Hochberg FDR correction. **22 features significant for anxiety, 19 for depression, 14 for suicidality**. `f_third_rate` (third-person pronouns) consistently negative across all targets — replicates Pennebaker. `f_sent_neg` rises monotonically with severity (anxiety +0.33 → suicidality +1.08).
+- **Health-anxiety severity ranking**: r/COVID19_support has 2× the mean health-anxiety score of r/Anxiety, validating its inclusion as the health-anxiety-enriched subreddit.
+- **15 figures generated** from real data into `docs/figures/`.
 - **22/22 unit tests passing**.
+
+→ **Full numbers, plots, and findings in [`docs/experiments.md`](docs/experiments.md)**.
 
 ### ✅ Built and ready to run (needs API key / GPU)
 - **Tier-2 LLM labeling**: ready to run with `ANTHROPIC_API_KEY` set. SQLite-cached so re-runs are free.
@@ -123,60 +127,85 @@ Python 3.11 · pandas · polars · pyarrow · scikit-learn · XGBoost · PyTorch
 
 ## Real-data results
 
-Trained on 13,134 cleaned + weakly-labeled posts. 70/15/15 stratified split.
+Trained on 13,133 cleaned + weakly-labeled posts. 80/20 stratified split per experiment.
 
-### TF-IDF + LogReg, target = anxiety
+### Experiment 1 — Per-target classifiers
 
-| metric | value |
+8 classifiers: TF-IDF + LogReg AND XGBoost-on-22-linguistic-features × 4 targets.
+
+| Target | n_pos | TF-IDF F1 | XGBoost F1 | XGBoost AUROC | XGBoost ECE |
+|---|---:|---:|---:|---:|---:|
+| anxiety | 3,433 | **0.892** | **0.892** | 0.986 | 0.029 |
+| health_anxiety | 9 | 0.250 | **0.800** ⚠️ | 1.000 | 0.001 |
+| depression | 1,022 | 0.699 | **0.719** | 0.978 | 0.030 |
+| suicidality | 133 | 0.704 | **0.912** | 0.999 | 0.002 |
+
+Key observation: **XGBoost on 22 linguistic features matches or beats the 80,000-feature TF-IDF text model on 3 of 4 targets**, with ~5× better calibration. The 22 hand-crafted features carry most of the predictive signal.
+
+⚠️ Health-anxiety F1 = 0.80 is a small-sample artifact (9 positives, model has lexicon access, label was lexicon-derived → circular). See [`docs/experiments.md`](docs/experiments.md) §1 for full caveats.
+
+### Experiment 2 — Cross-subreddit transfer (RQ3)
+
+Train on r/{Anxiety, socialanxiety, AnxietyDepression}, test on r/{COVID19_support, LivingAlone, relationship_advice}.
+
+| Split | F1 | Precision | Recall | AUROC |
+|---|---:|---:|---:|---:|
+| in-distribution | **0.969** | 0.997 | 0.944 | 0.996 |
+| cross-subreddit | **0.344** | 0.213 | 0.892 | 0.966 |
+
+**The most diagnostically interesting finding so far.** F1 collapses by −0.625 but AUROC barely moves (−0.030): the **ranking** of posts by anxiety score is preserved, but the **decision threshold** trained on r/Anxiety over-fires on r/relationship_advice. The model has learned a real anxiety signal; it just needs per-population threshold calibration to deploy.
+
+### Experiment 3 — 9-way subreddit classifier
+
+- **Macro-F1 = 0.648** (random ≈ 0.11) — substantial but not perfect linguistic distinctiveness.
+- r/depression / r/depression_help / r/AnxietyDepression heavily mutually-confused (depression-family). r/SuicideWatch and r/relationship_advice mostly self-classified.
+
+### Experiment 4 — Per-target linguistic markers
+
+| Target | Top feature | Cohen's d | # significant (BH p<0.05) |
+|---|---|---:|---:|
+| anxiety | `f_anx_term_rate` | +2.47 | **22** |
+| health_anxiety | `f_health_anx_term_rate` | +16.21 ⚠️ | 4 |
+| depression | `f_dep_term_rate` | +3.00 | **19** |
+| suicidality | `f_suic_term_rate` | +7.10 | **14** |
+
+The cross-target heatmap (`docs/figures/exp4__marker_heatmap.png`) shows two clinically meaningful patterns:
+
+1. **`f_third_rate` (third-person pronouns) is consistently negative across all 4 targets** — replicates Pennebaker on first-person preponderance in distress.
+2. **`f_sent_neg` rises monotonically with target severity**: anxiety +0.33 → health_anxiety +0.38 → depression +0.67 → suicidality +1.08.
+3. **`f_reassurance_count` (+0.99) and `f_health_anx_phrase_count` (+1.05) are uniquely health-anxiety-specific** — basically SHAI item content.
+
+### Experiment 5 — Health-anxiety severity ranking (continuous)
+
+| Subreddit | mean health-anxiety score |
 |---|---:|
-| Train / val / test | 9,193 / 1,970 / 1,971 |
-| Accuracy | 0.938 |
-| **F1** | **0.877** |
-| Precision | 0.907 |
-| Recall | 0.849 |
-| AUROC | 0.973 |
-| AUPRC | 0.943 |
-| Brier | 0.097 |
-| ECE (calibration) | 0.200 *(model is overconfident; needs temperature scaling)* |
-| Threshold (F1-optimal) | 0.560 |
+| **r/COVID19_support** | **0.238** |
+| r/Anxiety | 0.119 |
+| r/AnxietyDepression | 0.082 |
 
-### Per-subreddit F1 — the most diagnostic chart
-
-| subreddit | n_test | n_pos | F1 | reading |
-|---|---:|---:|---:|---|
-| Anxiety | 315 | 268 | **0.94** | model nails the primary-class subreddit |
-| AnxietyDepression | 198 | 104 | 0.86 | ✓ |
-| socialanxiety | 205 | 132 | 0.84 | ✓ |
-| COVID19_support | 153 | 9 | 0.70 | mild cross-domain drop |
-| LivingAlone | 136 | 1 | 1.00 | rare positive caught |
-| relationship_advice | 286 | 1 | 0.67 | mostly non-anxiety |
-| **depression** | 136 | **0** | — | weak labels gave 0 positives → motivates tier-2 |
-| **depression_help** | 224 | **0** | — | same |
-| **SuicideWatch** | 318 | **0** | — | same |
-
-### Top discriminative linguistic markers
-(Cohen's d, BH-corrected significance — ***p<0.001)
-
-| rank | feature | Cohen's d |
-|---|---|---:|
-| 1 | f_anx_term_rate | +2.47 *** |
-| 2 | f_anx_phrase_count | +0.74 *** |
-| 3 | f_avg_word_len | +0.46 *** |
-| 4 | f_body_part_rate | +0.34 *** |
-| 5 | f_sent_neg | +0.33 *** |
-| 6 | f_reassurance_count | +0.28 *** |
-| 7 | f_question_rate | +0.26 *** |
-| 8 | f_health_anx_term_rate | +0.25 *** |
-| 9 | f_third_rate | −0.51 *** |
-| 10 | f_first_plur_rate | −0.31 *** |
-
-The negative `f_third_rate` (third-person pronouns lower in anxious posts) replicates Pennebaker's pronoun-preponderance finding. The positive `f_body_part_rate` and `f_reassurance_count` rising in *general* anxiety posts shows somatic vocabulary leaking — a finding that sets up RQ2's health-anxiety chapter.
+r/COVID19_support has 2× the health-anxiety score of r/Anxiety, validating its inclusion as the `health_anxiety_enriched` group.
 
 ---
 
 ## Visual gallery
 
-All figures generated by `anxiety plot --run-dir experiments/runs/tfidf_logreg` from the real collected data.
+All figures generated from the real collected data. Corpus-level figures via `anxiety plot`; experiment figures via `python scripts/run_experiments.py`.
+
+### Per-target classifier comparison (Exp 1)
+![Per-target F1](docs/figures/exp1__per_target_f1.png)
+
+### Cross-subreddit transfer drop (Exp 2 — the diagnostic chart)
+![Cross-subreddit transfer](docs/figures/exp2__transfer.png)
+
+### Per-target marker heatmap (Exp 4)
+![Marker heatmap](docs/figures/exp4__marker_heatmap.png)
+
+### 9-way subreddit confusion (Exp 3)
+![Subreddit confusion](docs/figures/exp3__subreddit_confusion.png)
+
+---
+
+### Corpus + baseline-model figures
 
 ### Corpus overview
 ![Corpus overview](docs/figures/corpus_overview.png)
@@ -449,9 +478,10 @@ tests/                          22 tests
 | Doc | Topic |
 |---|---|
 | [`docs/index.md`](docs/index.md) | Reading order |
+| [`docs/experiments.md`](docs/experiments.md) | **What we achieved**: 5 classification studies on real data with numbers + findings + caveats |
 | [`docs/architecture.md`](docs/architecture.md) | Module-by-module design, dataflow, extension points |
 | [`docs/labeling.md`](docs/labeling.md) | The 3-tier labeling system in depth |
-| [`docs/validation.md`](docs/validation.md) | **Overfitting prevention, data correctness, prediction validation** |
+| [`docs/validation.md`](docs/validation.md) | Overfitting prevention, data correctness, prediction validation |
 | [`docs/models.md`](docs/models.md) | Per-model docs + tuning hooks |
 | [`docs/data_dictionary.md`](docs/data_dictionary.md) | Every column at every pipeline stage |
 | [`docs/cli_reference.md`](docs/cli_reference.md) | Every CLI command |

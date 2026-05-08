@@ -249,6 +249,102 @@ def plot_linguistic_markers(markers: pd.DataFrame, out_path: str | Path, top_n: 
     return _save(fig, out_path)
 
 
+def plot_per_target_comparison(
+    rows: pd.DataFrame, out_path: str | Path, metric: str = "f1"
+) -> Path:
+    """Grouped bar chart: model × target → metric.
+
+    `rows` columns: target, model, f1, precision, recall, auroc, support_pos, support_neg.
+    """
+    fig, ax = plt.subplots(figsize=(11, 5.5))
+    sns.barplot(data=rows, x="target", y=metric, hue="model", ax=ax)
+    ax.set_ylim(0, 1)
+    ax.set_xlabel("")
+    ax.set_ylabel(metric.upper())
+    ax.set_title(f"Per-target model comparison ({metric.upper()})")
+    ax.legend(title="", loc="upper right", frameon=True)
+    # Annotate support
+    for _, row in rows.drop_duplicates(subset="target").iterrows():
+        ax.annotate(
+            f"n_pos={int(row['support_pos'])}",
+            xy=(row["target"], 0.02),
+            ha="center",
+            fontsize=9,
+            color="dimgray",
+        )
+    return _save(fig, out_path)
+
+
+def plot_marker_heatmap(
+    markers_by_target: dict[str, pd.DataFrame],
+    out_path: str | Path,
+    top_n: int = 12,
+) -> Path:
+    """Heatmap of Cohen's d across (top features × targets).
+
+    Selects the union of top-N features by |d| across targets, so each row
+    is a feature that mattered for at least one target.
+    """
+    feature_set: list[str] = []
+    seen: set[str] = set()
+    for target, df_m in markers_by_target.items():
+        top = df_m.assign(absd=df_m["cohen_d"].abs()).sort_values("absd", ascending=False).head(top_n)
+        for f in top["feature"].tolist():
+            if f not in seen:
+                feature_set.append(f)
+                seen.add(f)
+
+    matrix = pd.DataFrame(index=feature_set, columns=list(markers_by_target.keys()), dtype=float)
+    for target, df_m in markers_by_target.items():
+        d_map = dict(zip(df_m["feature"], df_m["cohen_d"]))
+        for f in feature_set:
+            matrix.loc[f, target] = d_map.get(f, 0.0)
+
+    fig, ax = plt.subplots(figsize=(8.5, max(5, 0.35 * len(feature_set) + 1)))
+    sns.heatmap(
+        matrix.astype(float),
+        annot=True,
+        fmt=".2f",
+        cmap="vlag",
+        center=0,
+        cbar_kws={"label": "Cohen's d"},
+        ax=ax,
+    )
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+    ax.set_title("Linguistic markers by target  (Cohen's d, blue=higher in positives)")
+    return _save(fig, out_path)
+
+
+def plot_transfer_drop(
+    rows: pd.DataFrame, out_path: str | Path, metric: str = "f1"
+) -> Path:
+    """Bar chart contrasting in-distribution vs cross-subreddit F1 per target."""
+    melted = rows.melt(id_vars=["target", "split"], value_vars=[metric], var_name="m", value_name="value")
+    fig, ax = plt.subplots(figsize=(8.5, 4.8))
+    sns.barplot(data=rows, x="target", y=metric, hue="split", ax=ax)
+    ax.set_ylim(0, 1)
+    ax.set_xlabel("")
+    ax.set_ylabel(metric.upper())
+    ax.set_title(f"Cross-subreddit transfer ({metric.upper()})")
+    ax.legend(title="evaluation split", frameon=True)
+    return _save(fig, out_path)
+
+
+def plot_subreddit_confusion(
+    cm: pd.DataFrame, out_path: str | Path, title: str = "Subreddit classification"
+) -> Path:
+    """Row-normalized confusion matrix for the multi-class subreddit classifier."""
+    norm = cm.div(cm.sum(axis=1), axis=0).fillna(0.0)
+    fig, ax = plt.subplots(figsize=(9.5, 7.5))
+    sns.heatmap(norm, annot=True, fmt=".2f", cmap="Blues", ax=ax, vmin=0, vmax=1, cbar_kws={"label": "row-normalized"})
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("True")
+    ax.set_title(title)
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
+    return _save(fig, out_path)
+
+
 def plot_label_cooccurrence(df: pd.DataFrame, out_path: str | Path) -> Path:
     """Phi-coefficient matrix between binarized labels."""
     cols = [c for c in ("label_anxiety", "label_health_anxiety", "label_depression", "label_suicidality") if c in df.columns]
