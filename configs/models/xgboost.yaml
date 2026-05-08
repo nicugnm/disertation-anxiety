@@ -1,0 +1,29 @@
+name: xgboost_linguistic
+model_type: xgboost
+text_field: clean_text
+target: anxiety
+
+features:
+  use_liwc_like: true
+  use_somatic: true
+  use_pronouns: true
+  use_certainty: true
+  use_readability: true
+  use_sentiment: true
+  use_reassurance: true
+  use_health_terms: true
+
+classifier:
+  n_estimators: 500
+  max_depth: 6
+  learning_rate: 0.05
+  subsample: 0.8
+  colsample_bytree: 0.8
+  scale_pos_weight: auto
+  early_stopping_rounds: 30
+  random_state: 42
+
+train:
+  test_size: 0.15
+  val_size: 0.15
+  random_state: 42

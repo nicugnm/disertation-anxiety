@@ -1,0 +1,17 @@
+name: claude_zero_shot
+model_type: llm_zero_shot
+text_field: clean_text
+target: anxiety
+
+provider: anthropic
+model: claude-sonnet-4-6
+max_tokens: 64
+temperature: 0.0
+
+# Few-shot examples are loaded from data/processed/few_shot_examples.jsonl
+# Empty list = zero-shot.
+n_few_shot: 0
+
+# Cache to make re-evaluation free.
+cache_path: .cache/llm_zero_shot.sqlite
+rpm: 30

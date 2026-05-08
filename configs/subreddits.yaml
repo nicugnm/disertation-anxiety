@@ -1,0 +1,79 @@
+# Subreddit definitions and metadata.
+# Group tags drive label priors; "weight" influences tier-1 weak labeling and sampling.
+# Adding a subreddit later is just a new entry here — no code changes needed.
+
+subreddits:
+  - name: Anxiety
+    group: anxiety_primary
+    expected_anxiety_prior: 0.85
+    expected_health_anxiety_prior: 0.20
+    notes: "Largest general-anxiety subreddit."
+
+  - name: socialanxiety
+    group: anxiety_primary
+    expected_anxiety_prior: 0.85
+    expected_health_anxiety_prior: 0.05
+    notes: "Social-anxiety specific; low health-anxiety expected."
+
+  - name: AnxietyDepression
+    group: comorbid
+    expected_anxiety_prior: 0.80
+    expected_health_anxiety_prior: 0.15
+    expected_depression_prior: 0.70
+
+  - name: depression
+    group: depression_primary
+    expected_anxiety_prior: 0.40
+    expected_health_anxiety_prior: 0.05
+    expected_depression_prior: 0.85
+
+  - name: depression_help
+    group: depression_primary
+    expected_anxiety_prior: 0.35
+    expected_health_anxiety_prior: 0.05
+    expected_depression_prior: 0.80
+
+  - name: SuicideWatch
+    group: suicidality
+    expected_anxiety_prior: 0.30
+    expected_health_anxiety_prior: 0.05
+    expected_depression_prior: 0.70
+    expected_suicidality_prior: 0.90
+    handle_with_care: true
+
+  - name: COVID19_support
+    group: health_anxiety_enriched
+    expected_anxiety_prior: 0.50
+    expected_health_anxiety_prior: 0.45
+    notes: "High health-anxiety enrichment — pandemic context."
+
+  - name: COVID19positive
+    group: health_anxiety_enriched
+    expected_anxiety_prior: 0.40
+    expected_health_anxiety_prior: 0.40
+
+  - name: LivingAlone
+    group: baseline
+    expected_anxiety_prior: 0.20
+    expected_health_anxiety_prior: 0.05
+    notes: "Diverse baseline; not clinically themed."
+
+  - name: relationship_advice
+    group: baseline
+    expected_anxiety_prior: 0.25
+    expected_health_anxiety_prior: 0.03
+    notes: "Diverse baseline; high volume."
+
+# Optional additions — uncomment when adding more
+# - name: HealthAnxiety
+#   group: health_anxiety_primary
+#   expected_anxiety_prior: 0.90
+#   expected_health_anxiety_prior: 0.95
+
+collection:
+  time_filter: all          # all | year | month | week
+  posts_per_subreddit: 5000 # for PRAW collector; dump collector takes everything
+  min_score: 0
+  min_body_chars: 50
+  include_comments: false
+  include_self_only: true   # text posts only, skip link posts

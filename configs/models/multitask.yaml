@@ -1,0 +1,36 @@
+name: multitask_anxiety_health_dep_suic
+model_type: multitask_transformer
+text_field: clean_text
+
+# Joint heads — the dissertation novelty: shared encoder + task-specific heads
+# with weighted loss to handle label imbalance and confidence-tier weighting.
+targets:
+  - anxiety
+  - health_anxiety
+  - depression
+  - suicidality
+
+pretrained: mental/mental-roberta-base
+fallback_pretrained: roberta-base
+
+tokenizer:
+  max_length: 256
+
+train:
+  per_device_train_batch_size: 16
+  num_train_epochs: 5
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  fp16: false
+
+# Per-task loss weights (tunable). Down-weight noisy weak labels via tier_confidence.
+loss_weights:
+  anxiety: 1.0
+  health_anxiety: 1.5     # boost the rarer / focal class
+  depression: 1.0
+  suicidality: 1.2
+
+splits:
+  test_size: 0.15
+  val_size: 0.15

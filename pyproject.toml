@@ -1,0 +1,103 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "anxiety-detection"
+version = "0.1.0"
+description = "Detection of anxiety and health anxiety from Reddit using NLP — dissertation project"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Dissertation Author" }]
+
+dependencies = [
+    # Core data
+    "pandas>=2.1",
+    "polars>=0.20",
+    "pyarrow>=14",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    # Config / CLI
+    "pydantic>=2.5",
+    "pydantic-settings>=2.1",
+    "pyyaml>=6.0",
+    "typer>=0.12",
+    "rich>=13.7",
+    "structlog>=24.1",
+    "python-dotenv>=1.0",
+    # Reddit + dump readers
+    "praw>=7.7",
+    "asyncpraw>=7.7",
+    "zstandard>=0.22",
+    "orjson>=3.9",
+    "tqdm>=4.66",
+    # NLP
+    "nltk>=3.8",
+    "spacy>=3.7",
+    "textstat>=0.7",
+    "vaderSentiment>=3.3",
+    "regex>=2023.12",
+    "ftfy>=6.1",
+    "langdetect>=1.0.9",
+    # Classical ML
+    "scikit-learn>=1.4",
+    "xgboost>=2.0",
+    "lightgbm>=4.2",
+    "imbalanced-learn>=0.12",
+    # Deep learning
+    "torch>=2.2",
+    "transformers>=4.38",
+    "datasets>=2.17",
+    "accelerate>=0.27",
+    "evaluate>=0.4",
+    "sentence-transformers>=2.5",
+    # Tracking & reproducibility
+    "mlflow>=2.10",
+    # LLM client (Tier-2 labeling, zero-shot)
+    "anthropic>=0.25",
+    # Explainability
+    "shap>=0.44",
+    # Annotation TUI
+    "prompt-toolkit>=3.0",
+    # Visualization
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.1",
+    "ruff>=0.3",
+    "mypy>=1.8",
+    "ipykernel>=6.29",
+    "jupyterlab>=4.1",
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+]
+
+[project.scripts]
+anxiety = "src.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+disallow_untyped_defs = false
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"

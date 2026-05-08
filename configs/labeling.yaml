@@ -1,0 +1,62 @@
+# Configuration for the 3-tier labeling system.
+
+tier1_weak:
+  # Weight for the subreddit-prior signal vs lexicon signal in the weak label.
+  subreddit_prior_weight: 0.5
+  lexicon_weight: 0.5
+
+  # Lexicon thresholds for weak positive labels.
+  # A post becomes a weak positive if (subreddit_prior * w_sub + lex_score * w_lex) >= threshold.
+  thresholds:
+    anxiety: 0.55
+    health_anxiety: 0.60
+    depression: 0.55
+    suicidality: 0.65
+
+  # How many tokens to consider for lexicon matching (truncate very long posts).
+  max_tokens_for_lex: 800
+
+tier2_llm:
+  provider: anthropic
+  model: claude-sonnet-4-6
+  max_tokens: 1024
+  temperature: 0.0
+  # How many posts to send to the LLM (cost control).
+  max_posts: 8000
+  # Sample stratification: how many per subreddit_group.
+  per_group_sample:
+    anxiety_primary: 1500
+    health_anxiety_enriched: 2000
+    comorbid: 1000
+    depression_primary: 1000
+    suicidality: 500
+    baseline: 2000
+  # Cache file (hash of prompt + post -> response) to make re-runs free.
+  cache_path: .cache/llm_labels.sqlite
+  # Conservative rate limit (requests per minute).
+  rpm: 30
+
+tier3_manual:
+  # Target test-set size (gold standard).
+  target_size: 1000
+  # Stratify across subreddit_group.
+  stratify_by: subreddit_group
+  # Two-annotator setup: agreement target.
+  min_cohen_kappa:
+    anxiety: 0.70
+    health_anxiety: 0.60
+    depression: 0.65
+    suicidality: 0.75
+  # Path to write annotations.
+  output_path: data/processed/gold_test_set.parquet
+
+aggregate:
+  # When tiers conflict, prefer (in order): manual > llm > weak.
+  precedence: [manual, llm, weak]
+  # Drop a row from training if all three tiers are unavailable.
+  require_at_least_one_tier: true
+  # Confidence: scale labels by tier (manual=1.0, llm=0.7, weak=0.4) for loss weighting.
+  tier_confidence:
+    manual: 1.0
+    llm: 0.7
+    weak: 0.4
