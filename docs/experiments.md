@@ -195,6 +195,46 @@ anxiety evaluate experiments/runs/multitask_anxiety_health_dep_suic
 | health_anxiety | 3 / 2,455 | 0.333 [0.000, 0.818] | 0.994 [0.989, 1.000] | 0.001 |
 | suicidality | 20 / 2,438 | 0.647 [0.429, 0.817] | 0.995 [0.991, 0.998] | 0.004 |
 
+#### PR / ROC curves (per target)
+
+| anxiety | depression |
+|---|---|
+| ![PR/ROC anxiety](figures/pr_roc__anxiety.png) | ![PR/ROC depression](figures/pr_roc__depression.png) |
+
+| health_anxiety | suicidality |
+|---|---|
+| ![PR/ROC health_anxiety](figures/pr_roc__health_anxiety.png) | ![PR/ROC suicidality](figures/pr_roc__suicidality.png) |
+
+#### Calibration (reliability diagrams)
+
+| anxiety | depression |
+|---|---|
+| ![Calibration anxiety](figures/calibration__anxiety.png) | ![Calibration depression](figures/calibration__depression.png) |
+
+| health_anxiety | suicidality |
+|---|---|
+| ![Calibration health_anxiety](figures/calibration__health_anxiety.png) | ![Calibration suicidality](figures/calibration__suicidality.png) |
+
+#### Confusion matrices
+
+| anxiety | depression |
+|---|---|
+| ![Confusion anxiety](figures/confusion__anxiety.png) | ![Confusion depression](figures/confusion__depression.png) |
+
+| health_anxiety | suicidality |
+|---|---|
+| ![Confusion health_anxiety](figures/confusion__health_anxiety.png) | ![Confusion suicidality](figures/confusion__suicidality.png) |
+
+#### Per-subreddit F1 — distribution-shift diagnostic per target
+
+| anxiety | depression |
+|---|---|
+| ![F1-by-sub anxiety](figures/subreddit_f1__anxiety.png) | ![F1-by-sub depression](figures/subreddit_f1__depression.png) |
+
+| health_anxiety | suicidality |
+|---|---|
+| ![F1-by-sub health_anxiety](figures/subreddit_f1__health_anxiety.png) | ![F1-by-sub suicidality](figures/subreddit_f1__suicidality.png) |
+
 ### RQ1 headline table (cross-model, cross-target F1)
 
 | Target | n_pos (full corpus) | TF-IDF + LogReg | XGBoost-linguistic | MentalRoBERTa (single) | MentalRoBERTa (multi-task) |
