@@ -73,6 +73,8 @@ def aggregate_reports(out_dir: str | Path) -> pd.DataFrame:
         with fp.open() as f:
             data = json.load(f)
         rows.append({"model": model_name, "target": target, **data})
+    if not rows:
+        return pd.DataFrame()
     return pd.DataFrame(rows).sort_values(["target", "f1"], ascending=[True, False])
 
 

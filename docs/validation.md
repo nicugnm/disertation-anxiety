@@ -79,10 +79,10 @@ thresholds:
 Empirically, on our real corpus:
 
 ```
-weak_anxiety_pos:        3,433  (26%)   — usable
-weak_depression_pos:     1,022   (8%)   — usable
-weak_suicidality_pos:      133   (1%)   — sparse
-weak_health_anxiety_pos:     9   (0.07%) — far too sparse to train on
+weak_anxiety_pos:        3,560  (22%)   — usable
+weak_depression_pos:     1,557  (10%)   — usable
+weak_suicidality_pos:      116   (1%)   — sparse
+weak_health_anxiety_pos:    24   (0.15%) — still far too sparse to train on
 ```
 
 The model trained on these weak labels achieves F1 0.94 on r/Anxiety but **F1 = 0** on r/depression and r/SuicideWatch — because the weak labeller assigned 0 anxiety-positives there even though those posts are often co-morbidly anxious. **This is the empirical case for tier 2 LLM labelling**, exactly as predicted in the methodology.

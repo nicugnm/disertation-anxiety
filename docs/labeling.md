@@ -40,10 +40,10 @@ Each list cites a clinical instrument or a psycholinguistics paper, so the metho
 The lexicon-only labeller is conservative. On the real corpus we collected:
 
 ```
-weak_anxiety_pos:        3,433  (26%)
-weak_depression_pos:     1,022   (8%)
-weak_suicidality_pos:      133   (1%)
-weak_health_anxiety_pos:     9   (0.07%)   ← far too sparse to train on
+weak_anxiety_pos:        3,560  (22%)
+weak_depression_pos:     1,557  (10%)
+weak_suicidality_pos:      116   (1%)
+weak_health_anxiety_pos:    24   (0.15%)  ← still far too sparse to train on
 ```
 
 The model trained on these weak labels gets F1 0.94 on r/Anxiety but **F1 = 0** on r/depression and r/SuicideWatch — because the weak labeller assigned 0 anxiety-positives there even though those posts are often co-morbidly anxious. That's the empirical motivation for tier 2.

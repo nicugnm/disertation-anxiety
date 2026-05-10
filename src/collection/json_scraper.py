@@ -22,8 +22,11 @@ institution's ethics requirements.
 from __future__ import annotations
 
 import os
+import random
 import time
 from collections.abc import Iterator
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import requests
@@ -83,23 +86,58 @@ class JsonScraperCollector(BaseCollector):
         if elapsed < self.request_interval:
             time.sleep(self.request_interval - elapsed)
 
+    @staticmethod
+    def _parse_retry_after(value: str | None, fallback: float) -> float:
+        """Parse a Retry-After header. Accepts integer/float seconds or HTTP-date."""
+        if not value:
+            return fallback
+        s = value.strip()
+        try:
+            return max(1.0, float(s))
+        except ValueError:
+            pass
+        try:
+            target = parsedate_to_datetime(s)
+            if target.tzinfo is None:
+                target = target.replace(tzinfo=timezone.utc)
+            delta = (target - datetime.now(timezone.utc)).total_seconds()
+            return max(1.0, delta)
+        except (TypeError, ValueError):
+            return fallback
+
     def _get_json(self, url: str, params: dict[str, str]) -> dict[str, Any] | None:
-        """Cached GET. Returns None on permanent failure (404, banned sub, etc.)."""
-        # Build a stable cache key
+        """Cached GET. Returns None on permanent failure (404, banned sub, etc.).
+
+        429 (rate limit) is retried indefinitely, honoring the server's
+        Retry-After header. Network errors and 5xx server errors fall back
+        to the bounded `self.retries` cap.
+        """
         key = SqliteCache.make_key(url, params)
         cached = self.cache.get(key)
         if cached is not None:
             return cached
 
-        backoff = 2.0
-        for attempt in range(self.retries):
+        # Per-error-class counters and backoff. 429 is uncapped (we want all
+        # the data); transient network/5xx errors keep the bounded retry budget.
+        net_attempts = 0
+        srv_attempts = 0
+        rl_attempts = 0
+        rl_backoff = 30.0  # default wait when Retry-After is missing
+        while True:
             self._sleep_for_rate()
             try:
                 resp = self._session.get(url, params=params, timeout=30)
             except requests.RequestException as e:
-                log.warning("scraper.network_error", url=url, error=str(e), attempt=attempt)
-                time.sleep(backoff)
-                backoff *= 2
+                net_attempts += 1
+                if net_attempts > self.retries:
+                    log.error("scraper.give_up", url=url, reason="network", error=str(e))
+                    return None
+                wait = min(2.0 ** net_attempts, 60.0)
+                log.warning(
+                    "scraper.network_error",
+                    url=url, error=str(e), attempt=net_attempts, wait=wait,
+                )
+                time.sleep(wait)
                 continue
             self._last_request = time.time()
 
@@ -109,8 +147,6 @@ class JsonScraperCollector(BaseCollector):
                 except ValueError:
                     log.warning("scraper.bad_json", url=url)
                     return None
-                # Don't cache empty listings — Reddit sometimes returns empty
-                # transient responses we'd rather retry next run.
                 self.cache.set(key, data)
                 return data
 
@@ -120,26 +156,40 @@ class JsonScraperCollector(BaseCollector):
                 self.cache.set(key, None)
                 return None
 
-            if resp.status_code == 429 or 500 <= resp.status_code < 600:
-                # Honor Retry-After when present
-                retry_after = resp.headers.get("Retry-After")
-                wait = float(retry_after) if retry_after and retry_after.isdigit() else backoff
+            if resp.status_code == 429:
+                rl_attempts += 1
+                wait = self._parse_retry_after(
+                    resp.headers.get("Retry-After"), fallback=rl_backoff
+                )
+                # Cap a single sleep at 10 min and add ≤5s jitter to be polite.
+                wait = min(max(wait, 1.0), 600.0)
+                wait += random.uniform(0, min(wait * 0.1, 5.0))
                 log.warning(
                     "scraper.rate_limited",
-                    url=url,
-                    status=resp.status_code,
-                    retry_after=wait,
-                    attempt=attempt,
+                    url=url, status=429, attempt=rl_attempts,
+                    wait_seconds=round(wait, 1),
                 )
                 time.sleep(wait)
-                backoff *= 2
+                # Increase fallback for the next 429 in case the server keeps
+                # not sending Retry-After (cap at 10 min).
+                rl_backoff = min(rl_backoff * 2, 600.0)
+                continue
+
+            if 500 <= resp.status_code < 600:
+                srv_attempts += 1
+                if srv_attempts > self.retries:
+                    log.error("scraper.give_up", url=url, status=resp.status_code)
+                    return None
+                wait = min(2.0 ** srv_attempts, 60.0)
+                log.warning(
+                    "scraper.server_error",
+                    url=url, status=resp.status_code, attempt=srv_attempts, wait=wait,
+                )
+                time.sleep(wait)
                 continue
 
             log.warning("scraper.http_error", url=url, status=resp.status_code)
             return None
-
-        log.error("scraper.give_up", url=url)
-        return None
 
     # ------------------------------------------------------------------ #
     # Listing iteration

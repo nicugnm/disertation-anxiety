@@ -5,6 +5,15 @@ from pathlib import Path
 from typing import Literal
 
 import pandas as pd
+from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 
 from src.collection.base import BaseCollector
 from src.collection.dump_collector import DumpCollector
@@ -16,6 +25,7 @@ from src.utils.io import write_parquet
 from src.utils.logging import get_logger
 
 log = get_logger(__name__)
+_console = Console()
 
 CollectorName = Literal["praw", "dump", "synthetic", "scraper"]
 
@@ -47,16 +57,43 @@ def run_collection(
 
     collector = make_collector(backend, config, **kwargs)
     total = 0
-    for sub in config.subreddits:
-        rows = [p.to_dict() for p in collector.collect_subreddit(sub.name)]
-        if not rows:
-            log.warning("collection.empty", subreddit=sub.name)
-            continue
-        df = pd.DataFrame(rows)
-        path = out / f"{sub.name}.parquet"
-        write_parquet(df, path)
-        total += len(df)
-        log.info("collection.subreddit_done", subreddit=sub.name, n=len(df), path=str(path))
+
+    progress = Progress(
+        SpinnerColumn(),
+        TextColumn("[bold]{task.description}"),
+        BarColumn(bar_width=None),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TextColumn("[cyan]{task.fields[posts]:,} posts"),
+        console=_console,
+    )
+    with progress:
+        task = progress.add_task(
+            f"Collecting ({backend})", total=len(config.subreddits), posts=0
+        )
+        for sub in config.subreddits:
+            progress.update(task, description=f"r/{sub.name}")
+            rows: list[dict] = []
+            for p in collector.collect_subreddit(sub.name):
+                rows.append(p.to_dict())
+                progress.update(task, posts=total + len(rows))
+            if not rows:
+                log.warning("collection.empty", subreddit=sub.name)
+                progress.advance(task)
+                continue
+            df = pd.DataFrame(rows)
+            path = out / f"{sub.name}.parquet"
+            write_parquet(df, path)
+            total += len(df)
+            progress.update(task, advance=1, posts=total)
+            log.info(
+                "collection.subreddit_done",
+                subreddit=sub.name,
+                n=len(df),
+                path=str(path),
+            )
 
     log.info("collection.done", backend=backend, total=total, out=str(out))
     return out

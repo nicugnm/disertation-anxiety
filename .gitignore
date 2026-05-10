@@ -42,6 +42,11 @@ checkpoints/
 .idea/
 *.swp
 .DS_Store
+.claude/
+
+# Local logs
+*.log
+install.log
 
 # Env / secrets
 .env

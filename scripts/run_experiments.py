@@ -17,6 +17,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import matplotlib
+
+# Force a non-interactive backend before seaborn (which imports pyplot) so the
+# Tk event loop never starts. Rich runs its progress bar on a background
+# refresh thread; mixing that with TkAgg crashes with Tcl_AsyncDelete on Windows.
+matplotlib.use("Agg")
+
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -202,19 +209,19 @@ for target in ("anxiety",):  # only target with enough cross-distribution signal
         console.print(f"  [yellow]{target}: insufficient positives — skipping[/yellow]")
         continue
 
+    # In-distribution split FIRST so the held-out fold is never seen during fit.
+    train_idx, val_idx = train_test_split(
+        np.arange(len(df_train_xs)), test_size=0.2, random_state=SEED, stratify=y_tr,
+    )
     pipe = Pipeline([
         ("tfidf", TfidfVectorizer(ngram_range=(1, 2), min_df=5, max_df=0.95,
                                   sublinear_tf=True, lowercase=True, max_features=80000)),
         ("clf", LogisticRegression(C=1.0, class_weight="balanced",
                                    max_iter=1000, solver="liblinear", random_state=SEED)),
     ])
-    with status(f"Fitting transfer model on {len(df_train_xs):,} posts ({target})"):
-        pipe.fit(df_train_xs["clean_text"].tolist(), y_tr)
+    with status(f"Fitting transfer model on {len(train_idx):,} posts ({target})"):
+        pipe.fit(df_train_xs.iloc[train_idx]["clean_text"].tolist(), y_tr[train_idx])
 
-    # In-distribution split (held-out within training subs)
-    train_idx, val_idx = train_test_split(
-        np.arange(len(df_train_xs)), test_size=0.2, random_state=SEED, stratify=y_tr,
-    )
     proba_id = pipe.predict_proba(df_train_xs.iloc[val_idx]["clean_text"].tolist())[:, 1]
     rep_id = basic_metrics(y_tr[val_idx], proba_id)
     transfer_rows.append({"target": target, "split": "in-distribution",
