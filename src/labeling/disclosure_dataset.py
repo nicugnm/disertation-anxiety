@@ -199,7 +199,24 @@ def build_disclosure_test_users(
         row["subreddits"] = ",".join(sorted(user_subs.get(u, set())))
         rows.append(row)
 
-    out = pd.DataFrame(rows)
+    # Always materialize the full expected schema — this prevents downstream
+    # `KeyError: user_group` when the corpus happens to have zero positives
+    # or every positive gets filtered out (e.g. all under min_posts_per_user).
+    expected_cols = (
+        ["author_hash"]
+        + [f"user_{t}" for t in targets]
+        + ["user_group", "n_posts", "subreddits"]
+    )
+    if not rows:
+        out = pd.DataFrame(columns=expected_cols)
+    else:
+        out = pd.DataFrame(rows)
+        # If for some reason a column didn't appear (defensive — shouldn't
+        # happen with the loop above), backfill it.
+        for c in expected_cols:
+            if c not in out.columns:
+                out[c] = 0 if c.startswith("user_") and c != "user_group" else None
+
     if out.empty:
         log.info("disclosure_testset.users_built", n_users=0, n_positives={}, n_controls=0)
     else:

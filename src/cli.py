@@ -448,8 +448,35 @@ def build_disclosure_testset(
         seed=seed,
     )
     if test_users.empty:
-        console.print("[yellow]No disclosure positives in the corpus — run `anxiety label --tier disclosure` first.[/yellow]")
+        console.print(
+            "[yellow]No disclosure positives in the corpus — "
+            "run `anxiety label --tier disclosure` first.[/yellow]"
+        )
         raise typer.Exit(1)
+
+    # Diagnostic guards — fire only on impossible-by-construction states.
+    if "user_group" not in test_users.columns:
+        console.print(
+            "[red]test_users is missing the `user_group` column. "
+            "Columns present: " + ", ".join(test_users.columns) + "[/red]"
+        )
+        raise typer.Exit(2)
+    n_positive_users = sum(
+        int((test_users[f"user_{t}"].fillna(0).astype(int) == 1).sum())
+        for t in ("anxiety", "health_anxiety", "depression", "suicidality")
+        if f"user_{t}" in test_users.columns
+    )
+    n_controls = int((test_users["user_group"] == "matched_control").sum())
+    if n_positive_users == 0:
+        console.print("[yellow]No disclosed positive users survived filtering. "
+                      "Try lowering --min-posts-per-user.[/yellow]")
+        raise typer.Exit(1)
+    if n_controls == 0:
+        console.print(
+            "[yellow]No matched controls found. The disclosed users are in "
+            "subreddits where no other users have enough posts. "
+            "Try lowering --min-posts-per-user, or --controls-per-positive 1 first.[/yellow]"
+        )
 
     test_posts = materialize_test_posts(df, test_users)
     write_parquet(test_posts, test_p)
