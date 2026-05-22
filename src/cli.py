@@ -489,18 +489,15 @@ def build_disclosure_testset(
     marked = mark_held_out(df, test_users)
     write_parquet(marked, in_p)
 
-    # Summary table
+    # Summary table — test_posts already has the user_group column from
+    # materialize_test_posts (don't re-merge or pandas renames it to *_x/_y).
     from rich.table import Table
     table = Table(title="Disclosure test set")
     table.add_column("group")
     table.add_column("n_users", justify="right")
     table.add_column("n_posts", justify="right")
     grouped = test_users.groupby("user_group").size().sort_values(ascending=False)
-    posts_per_group = (
-        test_posts.merge(test_users[["author_hash", "user_group"]], on="author_hash", how="left")
-        .groupby("user_group")
-        .size()
-    )
+    posts_per_group = test_posts.groupby("user_group").size()
     for g, n in grouped.items():
         table.add_row(str(g), f"{int(n):,}", f"{int(posts_per_group.get(g, 0)):,}")
     console.print(table)
