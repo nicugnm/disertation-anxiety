@@ -66,7 +66,23 @@ class BaseModel(ABC):
     def y_from_df(self, df: pd.DataFrame) -> np.ndarray:
         col = f"label_{self.target}"
         if col not in df.columns:
-            raise KeyError(f"Missing column {col} in dataframe")
+            # Friendlier error pointing at the most likely cause.
+            available_tier_cols = [
+                c for c in df.columns
+                if c.startswith(("weak_", "disclosure_", "llm_", "manual_"))
+                and self.target in c
+            ]
+            hint = (
+                "  → Run `anxiety label --tier aggregate` to materialize "
+                f"`label_{self.target}` from the tier columns."
+            )
+            if available_tier_cols:
+                hint += f"\n  Tier columns present for this target: {available_tier_cols}"
+            else:
+                hint += f"\n  No tier columns found for '{self.target}' either — run `anxiety label --tier weak` first."
+            raise KeyError(
+                f"Missing column `{col}` in dataframe.\n{hint}"
+            )
         y = df[col].astype(float).fillna(0.0).values
         # Threshold soft labels at 0.5 for training
         return (y >= 0.5).astype(int)
