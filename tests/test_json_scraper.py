@@ -85,7 +85,7 @@ def test_scraper_pagination_and_dedup(tmp_path):
     ids = [r.id for r in rows]
     assert ids == ["aaa", "bbb", "ccc", "ddd"]
     assert all(r.subreddit == "Anxiety" for r in rows)
-    assert all(r.source == "json_scraper" for r in rows)
+    assert all(r.source == "scraper" for r in rows)
 
 
 def test_scraper_handles_404(tmp_path):

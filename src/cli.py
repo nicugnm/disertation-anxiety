@@ -182,6 +182,18 @@ def label(
         console.print(f"[green]Self-disclosure labels written to {out}[/green]")
         console.print(f"[dim]Disclosure positives: {positives}[/dim]")
 
+        # Auto-audit: gives the user immediate visibility into how much
+        # disclosure data we got, per subreddit + per user, plus sample matches
+        # for sanity-checking the regex. Also written to docs/audit_report.md.
+        from src.labeling.audit import print_audit, run_audit, write_audit_markdown
+
+        console.rule("[bold cyan]Audit")
+        audit = run_audit(df)
+        print_audit(audit, console)
+        report_path = Path("docs/audit_report.md")
+        write_audit_markdown(audit, report_path)
+        console.print(f"\n[green]Full report → {report_path}[/green]")
+
     if tier in ("llm", "all"):
         df = read_parquet(out) if out.exists() else df
         df = label_corpus(df, cfg_subs, cfg_lab)
@@ -241,14 +253,32 @@ def train(
     config: str = typer.Argument(..., help="Path to a model config YAML"),
     data_path: str = typer.Option(None, help="Labeled parquet path"),
     output_dir: str = typer.Option(None, help="Where to save the trained model"),
+    include_held_out: bool = typer.Option(
+        False, help="Include held-out (disclosure-test-set) users in training. Off by default — keep separation."
+    ),
 ) -> None:
-    """Train a model from a config YAML."""
+    """Train a model from a config YAML.
+
+    By default, posts marked `held_out_split=True` (members of the user-level
+    disclosure test set) are excluded from training to preserve the
+    noisy-train / clean-test separation. Pass --include-held-out to ignore
+    that filter.
+    """
     from src.models.registry import build_model
     from src.models.splits import split
     from src.utils.io import read_parquet
 
     model_cfg = load_model_config(config)
     df = read_parquet(data_path or (data_dir("processed") / "labeled.parquet"))
+
+    if "held_out_split" in df.columns and not include_held_out:
+        n_before = len(df)
+        df = df[~df["held_out_split"].fillna(False).astype(bool)].reset_index(drop=True)
+        if n_before != len(df):
+            console.print(
+                f"[dim]Excluded {n_before - len(df):,} held-out posts "
+                f"(disclosure test users); training on {len(df):,}.[/dim]"
+            )
 
     target = model_cfg.target or model_cfg.targets[0]  # for splitting only
     splits_cfg = model_cfg.extra.get("splits") or model_cfg.extra.get("train", {})
@@ -358,6 +388,183 @@ def plot(
     for name, p in paths.items():
         console.print(f"  [dim]{name:<32}[/dim] {p}")
     console.print(f"\n[green]Wrote {len(paths)} figures → {figures_dir}[/green]")
+
+
+@app.command()
+def audit(
+    data_path: str = typer.Option(None, help="Labeled corpus path"),
+    out_path: str = typer.Option("docs/audit_report.md", help="Markdown report path; pass empty to skip"),
+    n_examples: int = typer.Option(5, help="Example disclosure matches per target"),
+    top_n_subreddits: int = typer.Option(25),
+) -> None:
+    """Comprehensive corpus + labeling audit.
+
+    Reports corpus stats, per-tier label counts, per-subreddit × target
+    matrix, user-level disclosure stats, and sample disclosure matches so
+    you can sanity-check the regex isn't catching nonsense. Also writes a
+    self-contained Markdown report for the thesis appendix.
+    """
+    from src.labeling.audit import print_audit, run_audit, write_audit_markdown
+    from src.utils.io import read_parquet
+
+    in_p = Path(data_path) if data_path else data_dir("processed") / "labeled.parquet"
+    df = read_parquet(in_p)
+    a = run_audit(df, n_examples=n_examples, top_n_subreddits=top_n_subreddits)
+    print_audit(a, console)
+    if out_path:
+        path = write_audit_markdown(a, out_path)
+        console.print(f"\n[green]Markdown report → {path}[/green]")
+
+
+@app.command("build-disclosure-testset")
+def build_disclosure_testset(
+    in_path: str = typer.Option(None, help="Labeled corpus parquet"),
+    test_path: str = typer.Option(None, help="Output test-set parquet"),
+    controls_per_positive: int = typer.Option(2, help="Matched controls per positive user"),
+    min_posts_per_user: int = typer.Option(3, help="Skip users below this post count"),
+    seed: int = typer.Option(42),
+) -> None:
+    """Build a user-level disclosure test set with subreddit-matched controls.
+
+    Disclosed users become positives; non-disclosed users from the same
+    subreddits become controls. All their posts are held out from training
+    so the train/test split is genuinely user-disjoint and label-source-disjoint.
+    """
+    from src.labeling.disclosure_dataset import (
+        build_disclosure_test_users,
+        mark_held_out,
+        materialize_test_posts,
+    )
+    from src.utils.io import read_parquet, write_parquet
+
+    in_p = Path(in_path) if in_path else data_dir("processed") / "labeled.parquet"
+    test_p = Path(test_path) if test_path else data_dir("processed") / "disclosure_testset.parquet"
+
+    df = read_parquet(in_p)
+    test_users = build_disclosure_test_users(
+        df,
+        controls_per_positive=controls_per_positive,
+        min_posts_per_user=min_posts_per_user,
+        seed=seed,
+    )
+    if test_users.empty:
+        console.print("[yellow]No disclosure positives in the corpus — run `anxiety label --tier disclosure` first.[/yellow]")
+        raise typer.Exit(1)
+
+    test_posts = materialize_test_posts(df, test_users)
+    write_parquet(test_posts, test_p)
+
+    # Write the user-level summary alongside (useful for thesis tables).
+    users_summary_path = test_p.with_name(test_p.stem + "__users.csv")
+    test_users.to_csv(users_summary_path, index=False)
+
+    # Mark the corpus so `anxiety train` automatically excludes these users.
+    marked = mark_held_out(df, test_users)
+    write_parquet(marked, in_p)
+
+    # Summary table
+    from rich.table import Table
+    table = Table(title="Disclosure test set")
+    table.add_column("group")
+    table.add_column("n_users", justify="right")
+    table.add_column("n_posts", justify="right")
+    grouped = test_users.groupby("user_group").size().sort_values(ascending=False)
+    posts_per_group = (
+        test_posts.merge(test_users[["author_hash", "user_group"]], on="author_hash", how="left")
+        .groupby("user_group")
+        .size()
+    )
+    for g, n in grouped.items():
+        table.add_row(str(g), f"{int(n):,}", f"{int(posts_per_group.get(g, 0)):,}")
+    console.print(table)
+    console.print(f"[green]Test posts → {test_p}[/green]")
+    console.print(f"[green]Test users → {users_summary_path}[/green]")
+    console.print(f"[green]Corpus updated with held_out_split flag → {in_p}[/green]")
+
+
+@app.command("eval-disclosure")
+def eval_disclosure(
+    run_dir: str = typer.Argument(..., help="experiments/runs/<name> directory"),
+    target: str = typer.Option("anxiety", help="Target label to evaluate"),
+    test_path: str = typer.Option(None, help="Disclosure test parquet"),
+    aggregation: str = typer.Option("mean", help="mean | max | topk_mean"),
+    mask_disclosure_posts: bool = typer.Option(
+        False, help="Drop the explicit disclosure utterances before aggregating per user"
+    ),
+) -> None:
+    """Evaluate a trained model at user-level on the disclosure test set."""
+    import json
+
+    from src.labeling.disclosure_dataset import evaluate_user_level
+    from src.models.registry import build_model
+    from src.utils.io import read_parquet, write_parquet
+
+    run = Path(run_dir)
+    cfg = load_model_config(run / "config.yaml")
+    model = build_model(cfg).load(run / "model")
+
+    test_p = Path(test_path) if test_path else data_dir("processed") / "disclosure_testset.parquet"
+    test = read_parquet(test_p)
+
+    # Score each post
+    proba = model.predict_proba(test)
+    if proba.ndim == 2:
+        if target not in (cfg.targets or [cfg.target]):
+            raise typer.Exit(f"Target {target} not in model targets")
+        proba = proba[:, (cfg.targets or [cfg.target]).index(target)]
+    score_col = f"score_{target}"
+    test_with_scores = test.copy()
+    test_with_scores[score_col] = proba
+
+    # Two reports: with and without masking disclosure posts (always emit both,
+    # the table tells the story).
+    rep_full = evaluate_user_level(
+        test_with_scores, score_col=score_col, target=target,
+        aggregation=aggregation, mask_disclosure_posts=False,
+    )
+    rep_masked = evaluate_user_level(
+        test_with_scores, score_col=score_col, target=target,
+        aggregation=aggregation, mask_disclosure_posts=True,
+    )
+
+    out_dir = run / "eval"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "target": target,
+        "model": cfg.name,
+        "with_disclosure_posts": rep_full,
+        "without_disclosure_posts": rep_masked,
+    }
+    (out_dir / f"{cfg.name}__{target}__disclosure_userlevel.json").write_text(
+        json.dumps(payload, indent=2)
+    )
+    write_parquet(
+        test_with_scores[
+            ["author_hash", "subreddit", "id", "kind", "user_group",
+             f"user_{target}", score_col, "is_disclosure_post"]
+        ],
+        out_dir / f"{cfg.name}__{target}__disclosure_predictions.parquet",
+    )
+
+    # Compact terminal display
+    from rich.table import Table
+
+    table = Table(title=f"{cfg.name} — user-level disclosure eval ({target}, agg={aggregation})")
+    table.add_column("mode")
+    for m in ("n_users", "n_positive_users", "precision", "recall", "f1", "auroc", "auprc"):
+        table.add_column(m, justify="right")
+    for mode_label, rep in (("with disclosure", rep_full), ("disclosure masked", rep_masked)):
+        table.add_row(
+            mode_label,
+            f"{rep['n_users']}",
+            f"{rep['n_positive_users']}",
+            f"{rep['precision']:.3f}",
+            f"{rep['recall']:.3f}",
+            f"{rep['f1']:.3f}",
+            f"{rep.get('auroc', float('nan')):.3f}",
+            f"{rep.get('auprc', float('nan')):.3f}",
+        )
+    console.print(table)
 
 
 @app.command("erisk-load")
