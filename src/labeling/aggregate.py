@@ -30,7 +30,15 @@ def aggregate_labels(df: pd.DataFrame, cfg: LabelingConfig) -> pd.DataFrame:
             }
             col = col_map.get(tier)
             if col and col in row.index and pd.notna(row[col]):
-                return float(row[col]), tier, conf_map.get(tier, 0.5)
+                val = float(row[col])
+                # Disclosure is asymmetric: a positive (=1) is a high-confidence
+                # clinical claim, but a 0 only means "regex didn't fire" — NOT
+                # evidence the user is non-anxious. Fall through to weak for
+                # the negative signal. Same logic for LLM if the prompt is
+                # asymmetric (here it isn't — LLM returns 0/1 both meaningfully).
+                if tier == "disclosure" and val == 0:
+                    continue
+                return val, tier, conf_map.get(tier, 0.5)
         return None, None, None
 
     for k in LABELS:
