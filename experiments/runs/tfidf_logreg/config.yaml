@@ -1,0 +1,23 @@
+name: tfidf_logreg
+model_type: tfidf
+text_field: clean_text
+target: anxiety   # one of anxiety | health_anxiety | depression | suicidality
+
+vectorizer:
+  ngram_range: [1, 2]
+  min_df: 5
+  max_df: 0.95
+  max_features: 100000
+  sublinear_tf: true
+
+classifier:
+  C: 1.0
+  class_weight: balanced
+  max_iter: 1000
+  solver: liblinear
+
+train:
+  test_size: 0.15
+  val_size: 0.15
+  random_state: 42
+  cv_folds: 5
