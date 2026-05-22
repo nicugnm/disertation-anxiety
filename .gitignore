@@ -10,21 +10,29 @@ env/
 build/
 dist/
 
-# Project data — never commit raw mental-health data
-data/raw/*
-data/interim/*
-data/processed/*
+# Project data
+# NOTE: data is committed to this PRIVATE repo to enable workflow on a second
+# machine. If this repo ever changes to PUBLIC, restore the original exclusions
+# (data/raw/* etc.) immediately — Reddit Data API Terms forbid redistribution
+# of raw user text, and `docs/ethics.md` commits to ID + label release only.
+# .env stays excluded regardless.
 data/external/*
-!data/**/.gitkeep
+!data/external/.gitkeep
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
 
-# Cached LLM responses (can be large; keep locally)
+# Cached HTTP / LLM responses — too large for git (multi-GB), also contains raw
+# API payloads. Never push.
 .cache/
 *.cache
 
 # Experiment tracking
+# Note: experiments/runs/ IS tracked (sklearn/xgboost models are small).
+# Large checkpoint files from transformers are caught by the *.safetensors /
+# *.bin / *.pt rules below. mlruns/ and wandb/ are too large to track.
 mlruns/
 mlartifacts/
-experiments/runs/
 wandb/
 
 # Models

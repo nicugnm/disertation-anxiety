@@ -19,6 +19,7 @@ from src.collection.base import BaseCollector
 from src.collection.dump_collector import DumpCollector
 from src.collection.json_scraper import JsonScraperCollector
 from src.collection.praw_collector import PrawCollector
+from src.collection.search_scraper import SearchScraperCollector, _slug
 from src.collection.synthetic import SyntheticCollector
 from src.utils.config import SubredditsConfig, data_dir
 from src.utils.io import write_parquet
@@ -27,7 +28,7 @@ from src.utils.logging import get_logger
 log = get_logger(__name__)
 _console = Console()
 
-CollectorName = Literal["praw", "dump", "synthetic", "scraper"]
+CollectorName = Literal["praw", "dump", "synthetic", "scraper", "search"]
 
 
 def make_collector(name: CollectorName, config: SubredditsConfig, **kwargs) -> BaseCollector:
@@ -39,6 +40,8 @@ def make_collector(name: CollectorName, config: SubredditsConfig, **kwargs) -> B
         return SyntheticCollector(config, **kwargs)
     if name == "scraper":
         return JsonScraperCollector(config, **kwargs)
+    if name == "search":
+        return SearchScraperCollector(config, **kwargs)
     raise ValueError(f"Unknown collector: {name}")
 
 
@@ -69,6 +72,31 @@ def run_collection(
         TextColumn("[cyan]{task.fields[posts]:,} posts"),
         console=_console,
     )
+
+    # --- Search backend has a different iteration unit (queries, not subs).
+    if backend == "search":
+        search_collector: SearchScraperCollector = collector  # type: ignore[assignment]
+        queries = search_collector.queries
+        with progress:
+            task = progress.add_task(
+                "Collecting (search)", total=len(queries), posts=0
+            )
+            for q in queries:
+                progress.update(task, description=f"search: {q!r}")
+                rows = [p.to_dict() for p in search_collector.collect_subreddit(q)]
+                if rows:
+                    df = pd.DataFrame(rows)
+                    path = out / f"search__{_slug(q)}.parquet"
+                    write_parquet(df, path)
+                    total += len(df)
+                    log.info("search.query_done", query=q, n=len(df), path=str(path))
+                else:
+                    log.warning("search.query_empty", query=q)
+                progress.update(task, advance=1, posts=total)
+        log.info("collection.done", backend=backend, total=total, out=str(out))
+        return out
+
+    # --- All other backends iterate the configured subreddit list.
     with progress:
         task = progress.add_task(
             f"Collecting ({backend})", total=len(config.subreddits), posts=0

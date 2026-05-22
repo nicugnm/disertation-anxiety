@@ -51,12 +51,18 @@ tier3_manual:
   output_path: data/processed/gold_test_set.parquet
 
 aggregate:
-  # When tiers conflict, prefer (in order): manual > llm > weak.
-  precedence: [manual, llm, weak]
-  # Drop a row from training if all three tiers are unavailable.
+  # When tiers conflict, prefer (in order): manual > llm > disclosure > weak.
+  # `disclosure` = self-disclosed-diagnosis labels (Coppersmith / eRisk method).
+  # They are high-confidence because they require an explicit "I was diagnosed
+  # with X" statement passing negation/hypothetical/third-party filters.
+  precedence: [manual, llm, disclosure, weak]
+  # Drop a row from training if no tier produced a label.
   require_at_least_one_tier: true
-  # Confidence: scale labels by tier (manual=1.0, llm=0.7, weak=0.4) for loss weighting.
+  # Confidence: scale labels by tier for loss weighting. Disclosure sits between
+  # LLM and manual — it's a self-report (not clinician-verified) but it's an
+  # explicit clinical claim, more reliable than LLM pattern-recognition.
   tier_confidence:
     manual: 1.0
+    disclosure: 0.85
     llm: 0.7
     weak: 0.4

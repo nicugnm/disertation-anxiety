@@ -25,6 +25,7 @@ def aggregate_labels(df: pd.DataFrame, cfg: LabelingConfig) -> pd.DataFrame:
             col_map = {
                 "manual": f"manual_{k}",
                 "llm": f"llm_{k}",
+                "disclosure": f"disclosure_{k}",
                 "weak": f"weak_{k}_bin",
             }
             col = col_map.get(tier)

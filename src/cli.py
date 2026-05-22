@@ -44,19 +44,28 @@ def _root(
 
 @app.command()
 def collect(
-    backend: str = typer.Option("scraper", help="scraper | praw | dump | synthetic"),
+    backend: str = typer.Option("scraper", help="scraper | search | praw | dump | synthetic"),
     config: str = typer.Option("configs/subreddits.yaml"),
     out_dir: str = typer.Option(None),
     n_synthetic: int = typer.Option(200, help="Posts per subreddit (synthetic only)"),
     dump_dir: str = typer.Option("data/external/dumps", help="Path to .zst dumps"),
-    request_interval: float = typer.Option(1.5, help="Seconds between requests (scraper only)"),
-    max_pages: int = typer.Option(10, help="Max pages per listing — 100 posts each (scraper only)"),
+    request_interval: float = typer.Option(1.5, help="Seconds between requests"),
+    max_pages: int = typer.Option(10, help="Max pages per listing (scraper) or per query (search)"),
+    include_comments: bool = typer.Option(False, help="Also fetch comments per submission (scraper only)"),
+    min_submission_comments: int = typer.Option(5, help="Skip submissions with fewer comments (scraper + comments)"),
+    max_comments_per_post: int = typer.Option(40, help="Max comments to keep per submission"),
+    min_comment_score: int = typer.Option(1, help="Drop comments below this score"),
 ) -> None:
-    """Collect Reddit data into data/raw/<subreddit>.parquet.
+    """Collect Reddit data into data/raw/.
 
-    Default backend is `scraper` — uses Reddit's public JSON endpoints with
-    no credentials. Use `praw` for OAuth-authenticated collection (more
-    permissive limits) or `dump` for Pushshift `.zst` archives.
+    Backends:
+      - `scraper` (default): subreddit listings via public JSON. Optionally
+        fetches comments per submission with --include-comments.
+      - `search`: Reddit-wide search for self-disclosure phrases (e.g.
+        "I was diagnosed with depression"). One parquet per query.
+      - `praw`: OAuth-authenticated collection (needs Reddit credentials).
+      - `dump`: Pushshift / arctic_shift .zst archives.
+      - `synthetic`: reproducible synthetic data (no network).
     """
     from src.collection.runner import run_collection
 
@@ -69,6 +78,13 @@ def collect(
     if backend == "scraper":
         kwargs["request_interval"] = request_interval
         kwargs["max_pages_per_listing"] = max_pages
+        kwargs["include_comments"] = include_comments
+        kwargs["min_submission_comments"] = min_submission_comments
+        kwargs["max_comments_per_post"] = max_comments_per_post
+        kwargs["min_comment_score"] = min_comment_score
+    if backend == "search":
+        kwargs["request_interval"] = request_interval
+        kwargs["max_pages_per_query"] = max_pages
     run_collection(backend, cfg, out_dir=out_dir, **kwargs)
     console.print("[green]Collection complete.[/green]")
 
@@ -82,12 +98,29 @@ def collect(
 def preprocess(
     raw_dir: str = typer.Option(None),
     out_dir: str = typer.Option(None),
-    no_ner: bool = typer.Option(False, help="Skip spaCy NER (regex-only anonymization)"),
+    no_ner: bool = typer.Option(False, help="Skip spaCy NER (regex-only PII redaction; ~10× faster)"),
+    n_process_ner: int = typer.Option(
+        1, help="spaCy worker processes (>1 ≈ linear speedup on multi-core)"
+    ),
+    near_dup_threshold: int = typer.Option(
+        5, help="SimHash Hamming radius; -1 disables near-dedup (exact-only)"
+    ),
 ) -> None:
-    """Clean, anonymize, dedupe — raw → interim parquet."""
+    """Clean, anonymize, dedupe — raw → interim parquet.
+
+    At 100k+ posts, use --n-process-ner 4 (or higher, depending on your CPU)
+    to parallelize the spaCy NER pass. Or --no-ner to skip NER entirely
+    (regex still redacts emails, phones, usernames, URLs).
+    """
     from src.preprocessing.pipeline import run_preprocessing
 
-    run_preprocessing(raw_dir=raw_dir, out_dir=out_dir, use_ner=not no_ner)
+    run_preprocessing(
+        raw_dir=raw_dir,
+        out_dir=out_dir,
+        use_ner=not no_ner,
+        n_process_ner=n_process_ner,
+        near_dup_threshold=near_dup_threshold,
+    )
     console.print("[green]Preprocessing complete.[/green]")
 
 
@@ -98,17 +131,18 @@ def preprocess(
 
 @app.command()
 def label(
-    tier: str = typer.Option("weak", help="weak | llm | aggregate | all"),
+    tier: str = typer.Option("weak", help="weak | disclosure | llm | aggregate | all"),
     interim_dir: str = typer.Option(None),
     out_path: str = typer.Option(None, help="Output parquet (default data/processed/labeled.parquet)"),
     config: str = typer.Option("configs/subreddits.yaml"),
     labeling_config: str = typer.Option("configs/labeling.yaml"),
 ) -> None:
-    """Apply tier-1 weak labels, tier-2 LLM labels, or aggregate all tiers."""
+    """Apply tier-1 weak labels, self-disclosure labels, tier-2 LLM labels, or aggregate all tiers."""
     import pandas as pd
 
     from src.labeling.aggregate import aggregate_labels
     from src.labeling.llm import label_corpus
+    from src.labeling.self_disclosure import apply_disclosure_labels
     from src.labeling.weak import apply_weak_labels
     from src.utils.io import read_parquet, write_parquet
 
@@ -134,8 +168,21 @@ def label(
         write_parquet(df, out)
         console.print(f"[green]Tier-1 weak labels written to {out}[/green]")
 
+    if tier in ("disclosure", "all"):
+        # Reload to pick up prior tiers; disclosure is independent of subreddit
+        # and lexicon-thresholds so it can also be run standalone.
+        df = read_parquet(out) if out.exists() else df
+        df = apply_disclosure_labels(df)
+        write_parquet(df, out)
+        positives = {
+            t: int(df[f"disclosure_{t}"].sum())
+            for t in ("anxiety", "health_anxiety", "depression", "suicidality")
+            if f"disclosure_{t}" in df.columns
+        }
+        console.print(f"[green]Self-disclosure labels written to {out}[/green]")
+        console.print(f"[dim]Disclosure positives: {positives}[/dim]")
+
     if tier in ("llm", "all"):
-        # Reload to pick up tier-1 columns
         df = read_parquet(out) if out.exists() else df
         df = label_corpus(df, cfg_subs, cfg_lab)
         write_parquet(df, out)
@@ -311,6 +358,76 @@ def plot(
     for name, p in paths.items():
         console.print(f"  [dim]{name:<32}[/dim] {p}")
     console.print(f"\n[green]Wrote {len(paths)} figures → {figures_dir}[/green]")
+
+
+@app.command("erisk-load")
+def erisk_load(
+    path: str = typer.Argument(..., help="Path to an eRisk file or directory"),
+    task: str = typer.Option("auto", help="auto | task1 | task2"),
+    out_path: str = typer.Option(None, help="Output parquet path"),
+) -> None:
+    """Load an eRisk 2025 file (Task 1 TREC or Task 2 JSON) into a parquet."""
+    from pathlib import Path as _P
+
+    from src.collection.erisk_loader import (
+        load_task1,
+        load_task1_dir,
+        load_task2,
+        load_task2_dir,
+    )
+    from src.utils.io import write_parquet
+
+    p = _P(path)
+
+    # Auto-detect format
+    if task == "auto":
+        if p.is_dir():
+            json_files = list(p.glob("*.json"))
+            task = "task2" if json_files else "task1"
+        else:
+            task = "task2" if p.suffix.lower() == ".json" else "task1"
+
+    if task == "task1":
+        df = load_task1_dir(p) if p.is_dir() else load_task1(p)
+    elif task == "task2":
+        df = load_task2_dir(p) if p.is_dir() else load_task2(p)
+    else:
+        raise typer.Exit(f"Unknown task: {task}")
+
+    out = _P(out_path) if out_path else data_dir("external") / f"erisk_{task}.parquet"
+    write_parquet(df, out)
+    console.print(f"[green]Loaded {len(df):,} rows → {out}[/green]")
+
+
+@app.command("erisk-eval")
+def erisk_eval(
+    predictions: str = typer.Argument(..., help="Per-post predictions parquet"),
+    user_col: str = typer.Option("author_hash"),
+    label_col: str = typer.Option("label_anxiety"),
+    score_col: str = typer.Option("score_anxiety"),
+    threshold: float = typer.Option(0.5),
+    require_consecutive: int = typer.Option(1, help="Posts above threshold required to commit"),
+) -> None:
+    """Compute eRisk-style per-user metrics (ERDE_5, ERDE_50, F_latency, P@k) from per-post predictions."""
+    import json
+
+    from src.evaluation.erisk_metrics import (
+        decisions_from_per_post_predictions,
+        erisk_report,
+    )
+    from src.utils.io import read_parquet
+
+    df = read_parquet(predictions)
+    decisions = decisions_from_per_post_predictions(
+        df,
+        user_col=user_col,
+        true_label_col=label_col,
+        score_col=score_col,
+        threshold=threshold,
+        require_consecutive=require_consecutive,
+    )
+    report = erisk_report(decisions)
+    console.print(json.dumps(report, indent=2))
 
 
 @app.command()

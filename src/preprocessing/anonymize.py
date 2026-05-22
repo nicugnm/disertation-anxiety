@@ -79,7 +79,22 @@ REPLACE_ENT = {
 }
 
 
+def _redact_doc(text: str, doc) -> str:
+    """Apply NER replacements to `text` given an already-parsed spaCy `doc`."""
+    out: list[str] = []
+    last = 0
+    for ent in doc.ents:
+        if ent.label_ not in REPLACE_ENT:
+            continue
+        out.append(text[last : ent.start_char])
+        out.append(f" {REPLACE_ENT[ent.label_]} ")
+        last = ent.end_char
+    out.append(text[last:])
+    return "".join(out)
+
+
 def ner_redact(text: str, max_chars: int = 5000) -> str:
+    """Single-text NER redaction. For batched scale, use `ner_redact_batch`."""
     nlp = _get_spacy()
     if nlp is None:
         return text
@@ -87,17 +102,32 @@ def ner_redact(text: str, max_chars: int = 5000) -> str:
     # concentrated near the start anyway.
     truncated = text[:max_chars]
     tail = text[max_chars:]
-    doc = nlp(truncated)
+    return _redact_doc(truncated, nlp(truncated)) + tail
+
+
+def ner_redact_batch(
+    texts: list[str],
+    max_chars: int = 5000,
+    batch_size: int = 64,
+    n_process: int = 1,
+) -> list[str]:
+    """Batched NER redaction using spaCy's `nlp.pipe`.
+
+    Much faster than calling `ner_redact` in a loop because spaCy can stream
+    batches through its pipeline and (with n_process>1) parallelize across
+    multiple worker processes. Falls back to regex-only output if spaCy is
+    unavailable.
+    """
+    nlp = _get_spacy()
+    if nlp is None:
+        return list(texts)
+
+    truncated = [(t or "")[:max_chars] for t in texts]
+    tails = [(t or "")[max_chars:] for t in texts]
     out: list[str] = []
-    last = 0
-    for ent in doc.ents:
-        if ent.label_ not in REPLACE_ENT:
-            continue
-        out.append(truncated[last : ent.start_char])
-        out.append(f" {REPLACE_ENT[ent.label_]} ")
-        last = ent.end_char
-    out.append(truncated[last:])
-    return "".join(out) + tail
+    for i, doc in enumerate(nlp.pipe(truncated, batch_size=batch_size, n_process=n_process)):
+        out.append(_redact_doc(truncated[i], doc) + tails[i])
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -110,6 +140,14 @@ def anonymize(text: str, use_ner: bool = True) -> str:
     if use_ner:
         text = ner_redact(text)
     return text
+
+
+def anonymize_batch(texts: list[str], use_ner: bool = True, n_process: int = 1) -> list[str]:
+    """Batched anonymization. Regex layer first (vectorized), then NER pipe."""
+    redacted = [regex_redact(t or "") for t in texts]
+    if use_ner:
+        redacted = ner_redact_batch(redacted, n_process=n_process)
+    return redacted
 
 
 def anonymize_record(record: dict, use_ner: bool = True) -> dict:

@@ -13,10 +13,9 @@ from src.utils.config import SubredditsConfig
 class RedditPost:
     """Canonical post schema. All collectors emit records of this shape.
 
-    Fields beyond Reddit's raw API exist for downstream pipeline use:
-    `source` records which collector produced the row, `collected_at` lets us
-    audit data freshness in the thesis, and `extra` keeps backend-specific
-    fields without polluting the schema.
+    `kind` distinguishes submissions from comments; comments carry `parent_id`
+    so we can reconstruct conversation threads downstream. Comments have an
+    empty `title`; downstream cleaning concatenates title + body anyway.
     """
 
     id: str
@@ -30,8 +29,10 @@ class RedditPost:
     permalink: str
     is_self: bool
     over_18: bool
-    source: str  # "praw" | "dump" | "synthetic"
+    source: str           # "praw" | "scraper" | "search" | "dump" | "synthetic"
     collected_at: float
+    kind: str = "submission"     # "submission" | "comment"
+    parent_id: str | None = None  # set for comments; None for submissions
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -49,6 +50,8 @@ class RedditPost:
             "over_18": self.over_18,
             "source": self.source,
             "collected_at": self.collected_at,
+            "kind": self.kind,
+            "parent_id": self.parent_id,
         }
 
 
@@ -69,7 +72,9 @@ class BaseCollector(ABC):
 
     def passes_filters(self, post: RedditPost) -> bool:
         c = self.config.collection
-        if c.include_self_only and not post.is_self:
+        # `include_self_only` is a submission-level filter; comments are always
+        # self-text by nature, so don't reject them on this flag.
+        if c.include_self_only and post.kind == "submission" and not post.is_self:
             return False
         if post.score < c.min_score:
             return False
