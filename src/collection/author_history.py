@@ -247,3 +247,24 @@ def run_author_collection(
     }
     log.info("author.run.done", **stats)
     return stats
+
+
+# append to src/collection/author_history.py
+
+def merge_and_dedupe(
+    paths: list[str | Path], out_path: str | Path, text_col: str = "clean_text"
+) -> pd.DataFrame:
+    """Concat interim corpora and apply GLOBAL exact dedup (near-dedup already
+    ran within each corpus). Writes the merged frame to `out_path`."""
+    from src.preprocessing.dedupe import deduplicate
+
+    frames = [read_parquet(p) for p in paths if Path(p).exists()]
+    if not frames:
+        return pd.DataFrame()
+    combined = pd.concat(frames, ignore_index=True)
+    combined = deduplicate(
+        combined, text_col=text_col, near_dup_threshold=-1, show_progress=False
+    )
+    write_parquet(combined, out_path)
+    log.info("author.merge.done", inputs=len(frames), rows=len(combined), out=str(out_path))
+    return combined

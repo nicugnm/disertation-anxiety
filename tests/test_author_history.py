@@ -197,3 +197,19 @@ def test_run_author_collection_writes_per_hash_and_resumes(tmp_path):
     stats2 = run_author_collection(users, raw_dir=raw_dir, out_dir=out_dir, collector=fake2)
     assert stats2["skipped_existing"] == 1
     assert fake2.calls == []
+
+
+# append to tests/test_author_history.py
+from src.collection.author_history import merge_and_dedupe
+
+
+def test_merge_and_dedupe_removes_cross_corpus_duplicates(tmp_path):
+    base = pd.DataFrame({"subreddit": ["A", "A"], "clean_text": ["hello world", "unique base post"]})
+    extra = pd.DataFrame({"subreddit": ["A", "B"], "clean_text": ["hello world", "brand new post"]})
+    p_base = tmp_path / "base.parquet"; p_extra = tmp_path / "extra.parquet"
+    out = tmp_path / "_all.parquet"
+    write_parquet(base, p_base); write_parquet(extra, p_extra)
+    merged = merge_and_dedupe([p_base, p_extra], out)
+    # "hello world" appears in both → collapsed to 1; 3 distinct texts total.
+    assert len(merged) == 3
+    assert out.exists()
