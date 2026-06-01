@@ -192,6 +192,8 @@ def run_author_collection(
     out.mkdir(parents=True, exist_ok=True)
     hash_to_user = recover_author_usernames(users_df, raw_dir)
     if collector is None:
+        if config is None:
+            raise ValueError("config is required when collector is not provided")
         collector = AuthorHistoryCollector(
             config, request_interval=request_interval,
             max_pages_per_listing=max_pages, cache_path=cache_path,
@@ -224,7 +226,16 @@ def run_author_collection(
                 continue
             rows = [p.to_dict() for p in collector.collect_user(username)]
             if rows:
-                write_parquet(pd.DataFrame(rows), target)
+                # Atomic write: write to a temp file then rename, so a crash
+                # mid-write never leaves a truncated <hash>.parquet that the
+                # resume check would trust and skip forever.
+                tmp = target.with_name(f"{h}.parquet.tmp")
+                try:
+                    write_parquet(pd.DataFrame(rows), tmp)
+                    tmp.replace(target)
+                except BaseException:
+                    tmp.unlink(missing_ok=True)
+                    raise
                 written += 1
             else:
                 empty += 1

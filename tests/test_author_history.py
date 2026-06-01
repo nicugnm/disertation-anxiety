@@ -165,7 +165,7 @@ from src.collection.base import RedditPost
 
 
 class _FakeCollector:
-    """Yields two canned posts for any username; records calls."""
+    """Yields one canned post for any username; records calls."""
     def __init__(self):
         self.calls = []
 
