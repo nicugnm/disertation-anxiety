@@ -89,6 +89,40 @@ def collect(
     console.print("[green]Collection complete.[/green]")
 
 
+@app.command("collect-authors")
+def collect_authors(
+    users_csv: str = typer.Option(
+        None, help="Cohort CSV (default data/processed/disclosure_testset__users.csv)"
+    ),
+    raw_dir: str = typer.Option("data/raw", help="Where to recover usernames from"),
+    out_dir: str = typer.Option("data/raw/authors", help="Per-user history shards"),
+    request_interval: float = typer.Option(1.5, help="Seconds between requests"),
+    max_pages: int = typer.Option(10, help="Pages per listing (10x100 ~= 1000-item cap)"),
+    config: str = typer.Option("configs/subreddits.yaml"),
+) -> None:
+    """Fetch full Reddit histories for the disclosure-test cohort (both classes).
+
+    Resumable: re-running skips users whose <hash>.parquet already exists.
+    """
+    import pandas as pd
+
+    from src.collection.author_history import run_author_collection
+
+    cfg = load_subreddits(config)
+    csv_path = (
+        Path(users_csv) if users_csv
+        else data_dir("processed") / "disclosure_testset__users.csv"
+    )
+    if not csv_path.exists():
+        raise typer.Exit(f"Cohort CSV not found: {csv_path} — run build-disclosure-testset first.")
+    users_df = pd.read_csv(csv_path)
+    stats = run_author_collection(
+        users_df, cfg, raw_dir=raw_dir, out_dir=out_dir,
+        request_interval=request_interval, max_pages=max_pages,
+    )
+    console.print(f"[green]Author history collection complete:[/green] {stats}")
+
+
 # --------------------------------------------------------------------------- #
 # preprocess
 # --------------------------------------------------------------------------- #

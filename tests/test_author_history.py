@@ -157,3 +157,43 @@ def test_collect_user_dedups_repeated_ids(tmp_path):
     with patch.object(coll._session, "get", side_effect=fake_get):
         rows = list(coll.collect_user("alice"))
     assert [r.id for r in rows] == ["dup1"]  # deduped across the two sections
+
+
+# append to tests/test_author_history.py
+from src.collection.author_history import run_author_collection
+from src.collection.base import RedditPost
+
+
+class _FakeCollector:
+    """Yields two canned posts for any username; records calls."""
+    def __init__(self):
+        self.calls = []
+
+    def collect_user(self, username):
+        self.calls.append(username)
+        yield RedditPost(
+            id=f"{username}_p1", subreddit="X", created_utc=1.0, title="t",
+            body="b" * 60, author=username, score=1, num_comments=0,
+            permalink="", is_self=True, over_18=False, source="author_history",
+            collected_at=0.0, kind="submission",
+        )
+
+
+def test_run_author_collection_writes_per_hash_and_resumes(tmp_path):
+    raw_dir = tmp_path / "raw"; raw_dir.mkdir()
+    write_parquet(pd.DataFrame({"id": ["1"], "author": ["alice"]}), raw_dir / "S.parquet")
+    out_dir = tmp_path / "authors"
+    users = pd.DataFrame({"author_hash": [_hash_username("alice")]})
+    fake = _FakeCollector()
+
+    stats = run_author_collection(users, raw_dir=raw_dir, out_dir=out_dir, collector=fake)
+    h = _hash_username("alice")
+    assert (out_dir / f"{h}.parquet").exists()
+    assert stats["written"] == 1
+    assert fake.calls == ["alice"]
+
+    # Re-run: existing file → skipped, collector NOT called again.
+    fake2 = _FakeCollector()
+    stats2 = run_author_collection(users, raw_dir=raw_dir, out_dir=out_dir, collector=fake2)
+    assert stats2["skipped_existing"] == 1
+    assert fake2.calls == []

@@ -172,3 +172,67 @@ class AuthorHistoryCollector(JsonScraperCollector):
         except (ValueError, TypeError):
             return None
 
+
+def run_author_collection(
+    users_df: pd.DataFrame,
+    config=None,  # noqa: ANN001 — SubredditsConfig; required only when building the default collector
+    raw_dir: str | Path = "data/raw",
+    out_dir: str | Path = "data/raw/authors",
+    request_interval: float = 1.5,
+    max_pages: int = 10,
+    cache_path: str | None = None,
+    collector: "AuthorHistoryCollector | None" = None,
+) -> dict[str, int]:
+    """Scrape full histories for every cohort user; write one parquet per author_hash.
+
+    Resumable: a user whose <hash>.parquet already exists is skipped (and the
+    collector is never called for them). `collector` may be injected for tests.
+    """
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    hash_to_user = recover_author_usernames(users_df, raw_dir)
+    if collector is None:
+        collector = AuthorHistoryCollector(
+            config, request_interval=request_interval,
+            max_pages_per_listing=max_pages, cache_path=cache_path,
+        )
+
+    hashes = sorted({str(h) for h in users_df["author_hash"].dropna().astype(str)} - {""})
+    written = skipped = empty = unrecoverable = 0
+
+    from rich.progress import (
+        BarColumn, MofNCompleteColumn, Progress, SpinnerColumn,
+        TextColumn, TimeElapsedColumn, TimeRemainingColumn,
+    )
+    progress = Progress(
+        SpinnerColumn(), TextColumn("[bold]Author histories"),
+        BarColumn(bar_width=None), MofNCompleteColumn(),
+        TextColumn("•"), TimeElapsedColumn(), TextColumn("•"), TimeRemainingColumn(),
+    )
+    with progress:
+        task = progress.add_task("...", total=len(hashes))
+        for h in hashes:
+            target = out / f"{h}.parquet"
+            if target.exists():
+                skipped += 1
+                progress.advance(task)
+                continue
+            username = hash_to_user.get(h)
+            if not username:
+                unrecoverable += 1
+                progress.advance(task)
+                continue
+            rows = [p.to_dict() for p in collector.collect_user(username)]
+            if rows:
+                write_parquet(pd.DataFrame(rows), target)
+                written += 1
+            else:
+                empty += 1
+            progress.advance(task)
+
+    stats = {
+        "requested": len(hashes), "written": written, "skipped_existing": skipped,
+        "empty": empty, "unrecoverable": unrecoverable,
+    }
+    log.info("author.run.done", **stats)
+    return stats
