@@ -22,6 +22,10 @@ data/external/*
 !data/interim/.gitkeep
 !data/processed/.gitkeep
 
+# Per-user full histories: real usernames + full mental-health profiles.
+# Excluded even though data/raw/* is otherwise committed (see note above).
+data/raw/authors/
+
 # Cached HTTP / LLM responses — too large for git (multi-GB), also contains raw
 # API payloads. Never push.
 .cache/
