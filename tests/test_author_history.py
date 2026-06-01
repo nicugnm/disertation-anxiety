@@ -34,7 +34,6 @@ def test_recover_skips_shard_without_author_column(tmp_path):
     assert recover_author_usernames(users, raw_dir=raw_dir) == {}
 
 
-# append to tests/test_author_history.py
 from unittest.mock import patch
 
 from src.collection.author_history import AuthorHistoryCollector
@@ -110,6 +109,51 @@ def test_collect_user_handles_404(tmp_path):
         status_code = 404
         headers: dict = {}
 
+        def json(self):
+            return {}
+
     with patch.object(coll._session, "get", return_value=_R404()):
         rows = list(coll.collect_user("ghost"))
     assert rows == []
+
+
+def test_collect_user_paginates(tmp_path):
+    cfg = load_subreddits("configs/subreddits.yaml")
+    coll = AuthorHistoryCollector(
+        cfg, request_interval=0.0, max_pages_per_listing=3,
+        cache_path=str(tmp_path / "ah.sqlite"),
+    )
+    calls = []
+
+    def fake_get(url, params=None, timeout=None):  # noqa: ARG001
+        calls.append(params.get("after"))
+        if "submitted.json" in url:
+            if params.get("after") is None:
+                return _Resp(_submitted_page(["s1"], after="tok1"))
+            return _Resp(_submitted_page(["s2"], after=None))
+        return _Resp({"data": {"after": None, "children": []}})
+
+    with patch.object(coll._session, "get", side_effect=fake_get):
+        rows = list(coll.collect_user("alice"))
+    assert len([r for r in rows if r.kind == "submission"]) == 2
+    assert "tok1" in calls  # the second page's `after` cursor was requested
+
+
+def test_collect_user_dedups_repeated_ids(tmp_path):
+    cfg = load_subreddits("configs/subreddits.yaml")
+    coll = AuthorHistoryCollector(
+        cfg, request_interval=0.0, max_pages_per_listing=1,
+        cache_path=str(tmp_path / "ah.sqlite"),
+    )
+
+    def fake_get(url, params=None, timeout=None):  # noqa: ARG001
+        # Same id "dup1" appears as a submission AND as a comment.
+        if "submitted.json" in url:
+            return _Resp(_submitted_page(["dup1"], after=None))
+        if "comments.json" in url:
+            return _Resp(_comments_page(["dup1"], after=None))
+        return _Resp({"data": {"after": None, "children": []}})
+
+    with patch.object(coll._session, "get", side_effect=fake_get):
+        rows = list(coll.collect_user("alice"))
+    assert [r.id for r in rows] == ["dup1"]  # deduped across the two sections

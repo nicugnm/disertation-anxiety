@@ -55,8 +55,6 @@ def recover_author_usernames(
     return out
 
 
-# append to src/collection/author_history.py
-
 class AuthorHistoryCollector(JsonScraperCollector):
     """Fetch one user's full submission + comment history via no-auth JSON.
 
@@ -130,7 +128,7 @@ class AuthorHistoryCollector(JsonScraperCollector):
                 created_utc=float(raw.get("created_utc", 0.0) or 0.0),
                 title=str(raw.get("title", "") or ""),
                 body=body,
-                author=raw.get("author"),
+                author=(raw.get("author") if raw.get("author") not in ("[deleted]", "[removed]") else None),
                 score=int(raw.get("score", 0) or 0),
                 num_comments=int(raw.get("num_comments", 0) or 0),
                 permalink=str(raw.get("permalink", "") or ""),
@@ -160,12 +158,12 @@ class AuthorHistoryCollector(JsonScraperCollector):
                 created_utc=float(raw.get("created_utc", 0.0) or 0.0),
                 title="",
                 body=body,
-                author=author if author != "[deleted]" else None,
+                author=author if author not in ("[deleted]", "[removed]") else None,
                 score=int(raw.get("score", 0) or 0),
                 num_comments=0,
                 permalink=str(raw.get("permalink", "") or ""),
                 is_self=True,
-                over_18=False,
+                over_18=False,  # field absent from the user-listing endpoint
                 source="author_history",
                 collected_at=time.time(),
                 kind="comment",
