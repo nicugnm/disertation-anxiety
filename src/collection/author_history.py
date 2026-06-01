@@ -174,6 +174,3 @@ class AuthorHistoryCollector(JsonScraperCollector):
         except (ValueError, TypeError):
             return None
 
-    def collect_subreddit(self, name: str) -> Iterator[RedditPost]:  # type: ignore[override]
-        """Not used for author-history collection; delegates to the parent."""
-        return super().collect_subreddit(name)
