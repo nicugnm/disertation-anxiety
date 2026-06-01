@@ -249,8 +249,6 @@ def run_author_collection(
     return stats
 
 
-# append to src/collection/author_history.py
-
 def merge_and_dedupe(
     paths: list[str | Path], out_path: str | Path, text_col: str = "clean_text"
 ) -> pd.DataFrame:

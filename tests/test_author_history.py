@@ -159,7 +159,6 @@ def test_collect_user_dedups_repeated_ids(tmp_path):
     assert [r.id for r in rows] == ["dup1"]  # deduped across the two sections
 
 
-# append to tests/test_author_history.py
 from src.collection.author_history import run_author_collection
 from src.collection.base import RedditPost
 
@@ -199,7 +198,6 @@ def test_run_author_collection_writes_per_hash_and_resumes(tmp_path):
     assert fake2.calls == []
 
 
-# append to tests/test_author_history.py
 from src.collection.author_history import merge_and_dedupe
 
 
