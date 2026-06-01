@@ -229,6 +229,56 @@ def build_disclosure_test_users(
     return out
 
 
+def rebuild_groups_within_cohort(
+    df: pd.DataFrame,
+    cohort_hashes: Iterable[str],
+    targets: Iterable[str] = DEFAULT_TARGETS,
+) -> pd.DataFrame:
+    """Re-assign positive/control groups using ONLY the given cohort.
+
+    Re-detects disclosures on the (now enriched) histories of the cohort and
+    regroups them: any cohort user who discloses any target = positive; the rest
+    = matched_control. No external users are recruited, so both classes keep the
+    comparable history depth the enrichment gave them.
+    """
+    targets = list(targets)
+    cohort = {str(h) for h in cohort_hashes} - {""}
+    sub = df[df["author_hash"].astype(str).isin(cohort)].copy()
+
+    disclosed_per_target = {t: (find_disclosed_users(sub, t) & cohort) for t in targets}
+    all_disclosed: set[str] = set().union(*disclosed_per_target.values()) if targets else set()
+    post_counts = sub.groupby("author_hash").size().to_dict()
+    user_subs = _user_subreddit_index(sub)
+
+    rows: list[dict] = []
+    for u in sorted(cohort):
+        if not u:
+            continue
+        row: dict = {"author_hash": u}
+        for t in targets:
+            row[f"user_{t}"] = int(u in disclosed_per_target[t])
+        if u in all_disclosed:
+            disc = [t for t in targets if u in disclosed_per_target[t]]
+            row["user_group"] = "disclosed_" + "+".join(disc)
+        else:
+            row["user_group"] = "matched_control"
+        row["n_posts"] = int(post_counts.get(u, 0))
+        row["subreddits"] = ",".join(sorted(user_subs.get(u, set())))
+        rows.append(row)
+
+    expected_cols = (
+        ["author_hash"] + [f"user_{t}" for t in targets] + ["user_group", "n_posts", "subreddits"]
+    )
+    out = pd.DataFrame(rows, columns=expected_cols) if rows else pd.DataFrame(columns=expected_cols)
+    log.info(
+        "disclosure_testset.regrouped",
+        n_users=len(out),
+        n_positives={t: int(out[f"user_{t}"].sum()) for t in targets} if not out.empty else {},
+        n_controls=int((out["user_group"] == "matched_control").sum()) if not out.empty else 0,
+    )
+    return out
+
+
 def materialize_test_posts(
     df: pd.DataFrame,
     test_users: pd.DataFrame,

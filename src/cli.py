@@ -457,6 +457,11 @@ def build_disclosure_testset(
     controls_per_positive: int = typer.Option(2, help="Matched controls per positive user"),
     min_posts_per_user: int = typer.Option(3, help="Skip users below this post count"),
     seed: int = typer.Option(42),
+    cohort_users_csv: str = typer.Option(
+        None,
+        help="If set, regroup ONLY these users (author_hash column) within their "
+             "enriched histories instead of building a fresh corpus-wide test set.",
+    ),
 ) -> None:
     """Build a user-level disclosure test set with subreddit-matched controls.
 
@@ -475,12 +480,21 @@ def build_disclosure_testset(
     test_p = Path(test_path) if test_path else data_dir("processed") / "disclosure_testset.parquet"
 
     df = read_parquet(in_p)
-    test_users = build_disclosure_test_users(
-        df,
-        controls_per_positive=controls_per_positive,
-        min_posts_per_user=min_posts_per_user,
-        seed=seed,
-    )
+    if cohort_users_csv:
+        import pandas as pd
+
+        from src.labeling.disclosure_dataset import rebuild_groups_within_cohort
+
+        cohort_df = pd.read_csv(cohort_users_csv)
+        cohort_hashes = set(cohort_df["author_hash"].astype(str))
+        test_users = rebuild_groups_within_cohort(df, cohort_hashes)
+    else:
+        test_users = build_disclosure_test_users(
+            df,
+            controls_per_positive=controls_per_positive,
+            min_posts_per_user=min_posts_per_user,
+            seed=seed,
+        )
     if test_users.empty:
         console.print(
             "[yellow]No disclosure positives in the corpus — "

@@ -278,3 +278,26 @@ def test_evaluate_user_level_topk_aggregation_uses_strongest_posts():
     # Mean aggregation: alice ~= 0.183 < 0.4 (bob) → misclassified
     # Top-K mean (K=5 default): alice's top-5 includes 0.95 → much higher → correct
     assert topk_rep["f1"] >= mean_rep["f1"]
+
+
+from src.labeling.disclosure_dataset import rebuild_groups_within_cohort
+
+
+def test_rebuild_groups_within_cohort_promotes_disclosed_control():
+    # Cohort = alice (was control, now discloses in enriched history),
+    #          bob (still never discloses), carol (already a positive).
+    df = pd.DataFrame({
+        "author_hash": ["alice", "alice", "bob", "bob", "carol", "outsider"],
+        "subreddit": ["Anxiety", "GAD", "cooking", "cooking", "depression", "Anxiety"],
+        "disclosure_anxiety":      [1, 0, 0, 0, 0, 1],
+        "disclosure_health_anxiety": [0, 0, 0, 0, 0, 0],
+        "disclosure_depression":   [0, 0, 0, 0, 1, 0],
+    })
+    cohort = {"alice", "bob", "carol"}  # NB: 'outsider' must NOT appear
+    users = rebuild_groups_within_cohort(df, cohort, targets=("anxiety", "depression"))
+    by = users.set_index("author_hash")
+    assert set(users["author_hash"]) == cohort           # no external recruitment
+    assert int(by.loc["alice", "user_anxiety"]) == 1     # promoted
+    assert by.loc["alice", "user_group"].startswith("disclosed_")
+    assert int(by.loc["carol", "user_depression"]) == 1
+    assert by.loc["bob", "user_group"] == "matched_control"
