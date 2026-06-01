@@ -114,7 +114,8 @@ def collect_authors(
         else data_dir("processed") / "disclosure_testset__users.csv"
     )
     if not csv_path.exists():
-        raise typer.Exit(f"Cohort CSV not found: {csv_path} — run build-disclosure-testset first.")
+        console.print(f"[red]Cohort CSV not found: {csv_path} — run build-disclosure-testset first.[/red]")
+        raise typer.Exit(1)
     users_df = pd.read_csv(csv_path)
     stats = run_author_collection(
         users_df, cfg, raw_dir=raw_dir, out_dir=out_dir,
