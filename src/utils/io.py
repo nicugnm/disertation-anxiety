@@ -24,8 +24,8 @@ def write_parquet(df: pd.DataFrame, path: str | Path, compression: str = "zstd")
     pq.write_table(table, p, compression=compression)
 
 
-def read_parquet(path: str | Path) -> pd.DataFrame:
-    return pd.read_parquet(path)
+def read_parquet(path: str | Path, columns: list[str] | None = None) -> pd.DataFrame:
+    return pd.read_parquet(path, columns=columns)
 
 
 def read_parquet_dataset(paths: list[str | Path]) -> pd.DataFrame:

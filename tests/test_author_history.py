@@ -24,3 +24,11 @@ def test_recover_usernames_maps_hashes_and_skips_deleted(tmp_path):
     assert mapping == {_hash_username("alice"): "alice", _hash_username("bob"): "bob"}
     # Deleted author never appears.
     assert "[deleted]" not in mapping.values()
+
+
+def test_recover_skips_shard_without_author_column(tmp_path):
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    write_parquet(pd.DataFrame({"id": ["1"], "body": ["text"]}), raw_dir / "NoAuthor.parquet")
+    users = pd.DataFrame({"author_hash": [_hash_username("alice")]})
+    assert recover_author_usernames(users, raw_dir=raw_dir) == {}

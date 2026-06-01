@@ -39,11 +39,9 @@ def recover_author_usernames(
     out: dict[str, str] = {}
     for fp in sorted(raw_dir.glob("*.parquet")):
         try:
-            d = read_parquet(fp)
-        except Exception as e:  # noqa: BLE001
+            d = read_parquet(fp, columns=["author"])
+        except Exception as e:  # noqa: BLE001 — unreadable shard or missing `author` column
             log.warning("author.recover.read_failed", file=str(fp), error=str(e))
-            continue
-        if "author" not in d.columns:
             continue
         for a in d["author"].dropna().astype(str).unique():
             if a.lower() in _BAD_AUTHORS:
