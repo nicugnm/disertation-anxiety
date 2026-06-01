@@ -486,6 +486,9 @@ def build_disclosure_testset(
         from src.labeling.disclosure_dataset import rebuild_groups_within_cohort
 
         cohort_df = pd.read_csv(cohort_users_csv)
+        if "author_hash" not in cohort_df.columns:
+            console.print("[red]--cohort-users-csv must contain an `author_hash` column.[/red]")
+            raise typer.Exit(1)
         cohort_hashes = set(cohort_df["author_hash"].astype(str))
         test_users = rebuild_groups_within_cohort(df, cohort_hashes)
     else:

@@ -10,6 +10,7 @@ from src.labeling.disclosure_dataset import (
     find_matched_controls,
     mark_held_out,
     materialize_test_posts,
+    rebuild_groups_within_cohort,
 )
 
 
@@ -280,9 +281,6 @@ def test_evaluate_user_level_topk_aggregation_uses_strongest_posts():
     assert topk_rep["f1"] >= mean_rep["f1"]
 
 
-from src.labeling.disclosure_dataset import rebuild_groups_within_cohort
-
-
 def test_rebuild_groups_within_cohort_promotes_disclosed_control():
     # Cohort = alice (was control, now discloses in enriched history),
     #          bob (still never discloses), carol (already a positive).
@@ -301,3 +299,12 @@ def test_rebuild_groups_within_cohort_promotes_disclosed_control():
     assert by.loc["alice", "user_group"].startswith("disclosed_")
     assert int(by.loc["carol", "user_depression"]) == 1
     assert by.loc["bob", "user_group"] == "matched_control"
+
+
+def test_rebuild_groups_within_cohort_empty_returns_schema():
+    df = _make_corpus()
+    out = rebuild_groups_within_cohort(df, set(), targets=("anxiety", "depression"))
+    assert out.empty
+    assert list(out.columns) == [
+        "author_hash", "user_anxiety", "user_depression", "user_group", "n_posts", "subreddits"
+    ]
