@@ -1,0 +1,38 @@
+{
+  "target": "anxiety",
+  "model": "mentalbert_anxiety",
+  "with_disclosure_posts": {
+    "accuracy": 0.8156226223687547,
+    "precision": 0.2762691853600944,
+    "recall": 0.6724137931034483,
+    "f1": 0.3916317991631799,
+    "brier": 0.12605271988499045,
+    "support_pos": 348,
+    "support_neg": 3595,
+    "auroc": 0.8394041852509073,
+    "auprc": 0.3692655598466247,
+    "threshold": 0.48506054282188416,
+    "ece": 0.15672949642504416,
+    "n_users": 3943,
+    "n_positive_users": 348,
+    "aggregation": "mean",
+    "mask_disclosure_posts": false
+  },
+  "without_disclosure_posts": {
+    "accuracy": 0.8006257110352674,
+    "precision": 0.18758815232722145,
+    "recall": 0.5155038759689923,
+    "f1": 0.2750775594622544,
+    "brier": 0.12835272531573003,
+    "support_pos": 258,
+    "support_neg": 3258,
+    "auroc": 0.7162357655098244,
+    "auprc": 0.18516654172024302,
+    "threshold": 0.4394063949584961,
+    "ece": 0.16186618656174315,
+    "n_users": 3516,
+    "n_positive_users": 258,
+    "aggregation": "mean",
+    "mask_disclosure_posts": true
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "target": "anxiety",
+  "model": "tfidf_logreg",
+  "with_disclosure_posts": {
+    "accuracy": 0.8584833882830333,
+    "precision": 0.3170731707317073,
+    "recall": 0.5229885057471264,
+    "f1": 0.3947939262472885,
+    "brier": 0.1375637800615642,
+    "support_pos": 348,
+    "support_neg": 3595,
+    "auroc": 0.8512733202244497,
+    "auprc": 0.3481351752735958,
+    "threshold": 0.6375657995732026,
+    "ece": 0.2029923525155231,
+    "n_users": 3943,
+    "n_positive_users": 348,
+    "aggregation": "mean",
+    "mask_disclosure_posts": false
+  },
+  "without_disclosure_posts": {
+    "accuracy": 0.8094425483503982,
+    "precision": 0.1906906906906907,
+    "recall": 0.49224806201550386,
+    "f1": 0.2748917748917749,
+    "brier": 0.13422018919923775,
+    "support_pos": 258,
+    "support_neg": 3258,
+    "auroc": 0.7359641859513374,
+    "auprc": 0.17570435610957363,
+    "threshold": 0.49395663035886844,
+    "ece": 0.18524391135214147,
+    "n_users": 3516,
+    "n_positive_users": 258,
+    "aggregation": "mean",
+    "mask_disclosure_posts": true
+  }
+}

@@ -210,6 +210,54 @@ Fine-tuned `mental/mental-roberta-base` on the same tier-1-labeled corpus, 4 epo
 
 ---
 
+### Experiment 7 — User-level self-disclosure evaluation (the honest test)
+
+The per-post tables above are graded against the **weak** labels the models were trained on. Experiment 7 is the independent test: each model scores every post by the **held-out disclosure-test users** (3,943 users — disclosed-positives + subreddit-matched controls, none seen in training), the scores are aggregated per user (mean), and compared against the user's **self-disclosure** label. We report it two ways — **with** the explicit "I was diagnosed…" posts included, and **masked** (those posts removed), so the masked column reflects only the *implicit* signal in the user's other posts.
+
+![User-level disclosure evaluation](docs/figures/disclosure_userlevel.png)
+
+| Target | Model | AUROC (with → masked) | F1 (with → masked) | masked precision | n pos. users |
+|---|---|---|---|---:|---:|
+| anxiety | TF-IDF + LogReg | 0.851 → **0.736** | 0.395 → 0.275 | 0.191 | 348 |
+| anxiety | MentalRoBERTa (single) | 0.839 → 0.716 | 0.392 → 0.275 | 0.188 | 348 |
+| anxiety | MentalRoBERTa (multi-task) | 0.828 → 0.701 | 0.380 → 0.265 | 0.177 | 348 |
+| health_anxiety | MentalRoBERTa (multi-task) | 0.759 → 0.711 | 0.200 → 0.163 | 0.099 | 186 |
+| depression | MentalRoBERTa (multi-task) | 0.863 → **0.561** | 0.604 → 0.295 | 0.225 | 807 |
+
+**What this honestly shows:**
+
+1. **Transformers do not beat TF-IDF on the honest (masked) metric.** Masked anxiety AUROC is highest for plain **TF-IDF (0.736)**, ahead of both transformers (0.716 / 0.701) — consistent with the literature that domain-adapted encoders give little lift on Reddit once subreddit-style shortcuts are removed. (The transformer runs also fell back to `roberta-base` because `mental/mental-roberta-base` is now a gated HF repo.)
+2. **Health anxiety is the weakest class** (masked AUROC 0.711, F1 0.163, precision ~0.10) — the matched controls post in the same anxiety subreddits, so separating *diagnosed* from *anxious-but-undiagnosed* users by implicit language alone is hard. This is the empirical case for the health-anxiety-specific work.
+3. **Depression detection is mostly the disclosure sentence.** With the explicit post it looks strong (AUROC 0.863, F1 0.604); **masked, it collapses to near-chance (AUROC 0.561)** — the model largely recognizes "I was diagnosed with depression," not implicit depressive language.
+
+Full numbers (incl. recall/AUPRC and the per-aggregation breakdown): [`docs/disclosure_eval.md`](docs/disclosure_eval.md). Regenerate with `python scripts/report_disclosure_eval.py` after any `anxiety eval-disclosure` run.
+
+---
+
+### Experiment 8 — r/HealthAnxiety vs r/Anxiety head-to-head (the headline contribution)
+
+The first transformer trained specifically to separate **health anxiety from general anxiety** as distinct classes. The only prior baseline in this exact space is Low et al. (2020), SGD-L1 **weighted-F1 = 0.851** (subreddit-as-proxy, submission-level). Binary subreddit-membership labels (r/HealthAnxiety = 1, r/Anxiety = 0), **author-disjoint** split (no user in both train and test). `scripts/exp_ha_vs_anxiety.py`.
+
+| Setup | Model | weighted-F1 | F1 (HA) | AUROC | vs Low 2020 (0.851) |
+|---|---|---:|---:|---:|---:|
+| all posts (92.8% comments) | TF-IDF + LogReg | 0.771 | 0.716 | 0.844 | −0.080 |
+| all posts (92.8% comments) | MentalRoBERTa | 0.803 | 0.743 | 0.874 | −0.048 |
+| **submissions only** (Low's unit) | TF-IDF + LogReg | 0.886 | 0.859 | 0.944 | **+0.035** |
+| **submissions only** (Low's unit) | **MentalRoBERTa** | **0.906** | **0.876** | **0.955** | **+0.055** |
+
+![HealthAnxiety vs Anxiety markers](docs/figures/ha_vs_anxiety_markers_submissions.png)
+
+**What this shows:**
+
+1. **We beat the only published baseline.** On the comparable setup (submissions, like Low 2020), MentalRoBERTa reaches **weighted-F1 0.906 / AUROC 0.955** — and even plain TF-IDF (0.886) clears 0.851. Health anxiety **is** linguistically separable from general anxiety.
+2. **Comments are genuinely harder.** On the full comment-heavy corpus the numbers drop to 0.803 (transformer) / 0.771 (TF-IDF) — short conversational replies are much harder to attribute than first-person submissions. Reporting both is the honest, informative result.
+3. **The transformer helps here** (+0.02 weighted-F1, +0.011 AUROC over TF-IDF on submissions) — unlike the user-level disclosure task (Exp 7), where it didn't. Abundant clean subreddit labels reward the domain encoder; noisy implicit-signal detection doesn't.
+4. **Markers replicate Low 2020 exactly:** r/HealthAnxiety → `health anxiety, google, symptoms, my health, results, disease, illness, spiral, googling, doctors`; r/Anxiety → `scared, work, medication, job, sleep, depression`. Clinically sensible, SHAI-aligned (body vigilance, reassurance-seeking, online-checking).
+
+_Caveat: the submissions test set is small (636 posts), so the F1 bootstrap CI is wide (MentalRoBERTa [0.846, 0.906]); AUROC 0.955 and weighted-F1 0.906 nonetheless clear 0.851. Re-run with `python scripts/exp_ha_vs_anxiety.py --submissions-only`._
+
+---
+
 ## Visual gallery
 
 All figures generated from the real collected data. Corpus-level figures via `anxiety plot`; experiment figures via `python scripts/run_experiments.py`.

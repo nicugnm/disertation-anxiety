@@ -1,0 +1,11 @@
+subreddit,n,n_pos,precision,recall,f1
+SuicideWatch,333,20,0.9166666666666666,0.55,0.6875
+Anxiety,327,0,0.0,0.0,0.0
+AnxietyDepression,196,0,0.0,0.0,0.0
+COVID19_support,208,0,0.0,0.0,0.0
+COVID19positive,245,0,0.0,0.0,0.0
+LivingAlone,141,0,0.0,0.0,0.0
+depression,331,0,0.0,0.0,0.0
+depression_help,221,0,0.0,0.0,0.0
+relationship_advice,256,0,0.0,0.0,0.0
+socialanxiety,200,0,0.0,0.0,0.0

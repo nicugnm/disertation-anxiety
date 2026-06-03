@@ -1,0 +1,38 @@
+{
+  "target": "anxiety",
+  "model": "multitask_anxiety_health_dep_suic",
+  "with_disclosure_posts": {
+    "accuracy": 0.809789500380421,
+    "precision": 0.2668213457076566,
+    "recall": 0.6609195402298851,
+    "f1": 0.38016528925619836,
+    "brier": 0.13248448979802918,
+    "support_pos": 348,
+    "support_neg": 3595,
+    "auroc": 0.8277156970888687,
+    "auprc": 0.32995457150349916,
+    "threshold": 0.49509668350219727,
+    "ece": 0.1611912209583741,
+    "n_users": 3943,
+    "n_positive_users": 348,
+    "aggregation": "mean",
+    "mask_disclosure_posts": false
+  },
+  "without_disclosure_posts": {
+    "accuracy": 0.7841296928327645,
+    "precision": 0.1767741935483871,
+    "recall": 0.5310077519379846,
+    "f1": 0.26524685382381413,
+    "brier": 0.13215250382788152,
+    "support_pos": 258,
+    "support_neg": 3258,
+    "auroc": 0.7008437192170971,
+    "auprc": 0.1707693760513374,
+    "threshold": 0.4007377624511719,
+    "ece": 0.16721758812647347,
+    "n_users": 3516,
+    "n_positive_users": 258,
+    "aggregation": "mean",
+    "mask_disclosure_posts": true
+  }
+}
