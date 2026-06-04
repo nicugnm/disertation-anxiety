@@ -389,6 +389,20 @@ Protected demographics are unavailable (anonymized corpus) and inferring them wi
 
 ---
 
+### External (cross-corpus) validation
+
+Internal splits only prove internal validity (cf. Ernala et al. 2019). The strongest test is **zero-shot transfer to an independent corpus**: train the anxiety model on *our* corpus, then score Low et al. (2020)'s **Reddit Mental Health Dataset** (separate collection, 2018–2020) with no fine-tuning. `src/evaluation/external.py`, `scripts/external_validation.py`.
+
+| external dataset | n | AUROC | AUPRC | F1@0.5 |
+|---|---:|---:|---:|---:|
+| **RMHD (Low 2020)** — anxiety subs vs controls | 20,733 | **0.920** | 0.909 | 0.819 |
+
+![RMHD transfer](docs/figures/external_validation.png)
+
+**The model transfers cleanly across corpora (AUROC 0.92).** Mean predicted P(anxiety) per RMHD subreddit cleanly separates anxiety-related communities — anxiety **0.80**, healthanxiety **0.71**, socialanxiety **0.60** — from controls — conspiracy 0.09, parenting 0.12, fitness 0.14, with meditation (0.31) the highest control (a sensible mindfulness/anxiety overlap). This is genuine **external validity** — the learned signal isn't an artifact of our collection. **ANGST** (Hengle et al. 2024 — 3 expert-psychologist labels, the gold external comparator) is a *gated* HuggingFace dataset; the loader/eval harness is built and runs automatically once access is requested + granted (`huggingface-cli login`, download to `data/external/angst/`). Full table in [docs/external_validation.md](docs/external_validation.md).
+
+---
+
 ## Visual gallery
 
 All figures generated from the real collected data. Corpus-level figures via `anxiety plot`; experiment figures via `python scripts/run_experiments.py`.
