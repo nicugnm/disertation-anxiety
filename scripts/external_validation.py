@@ -93,7 +93,7 @@ def main() -> None:
     # ---- ANGST (gated) ----
     angst = None
     try:
-        angst = load_angst(ANGST_DIR)
+        angst = load_angst(ANGST_DIR, target=TARGET)
     except Exception as ex:  # noqa: BLE001
         print(f"ANGST present but unreadable: {ex}")
     if angst is None:

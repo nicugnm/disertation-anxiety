@@ -7,6 +7,7 @@ _Regenerate: `python scripts/external_validation.py`_
 | dataset | n | n_pos | auroc | auprc | f1@0.5 |
 |---|---|---|---|---|---|
 | RMHD (Low 2020) | 20733 | 8619 | 0.9195 | 0.9086 | 0.8194 |
+| ANGST (Hengle 2024, experts) | 2872 | 701 | 0.8215 | 0.5185 | 0.6039 |
 
 ## RMHD per-subreddit (mean predicted anxiety score)
 
