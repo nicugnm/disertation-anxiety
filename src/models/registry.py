@@ -30,6 +30,10 @@ def build_model(config: ModelConfig) -> BaseModel:
         from src.models.fusion import FusionMultiTaskModel
 
         return FusionMultiTaskModel(config)
+    if config.model_type == "hier_user":
+        from src.models.hier import HierUserModel
+
+        return HierUserModel(config)
     if config.model_type == "llm_zero_shot":
         from src.models.llm_zero_shot import LlmZeroShotModel
 

@@ -1,0 +1,33 @@
+name: hier_user_attention
+model_type: hier_user
+text_field: clean_text
+
+# User-level targets (disclosed-vs-control). suicidality omitted (ethics + sparsity).
+targets:
+  - anxiety
+  - health_anxiety
+  - depression
+
+post_encoder:
+  pretrained: mental/mental-roberta-base
+  fallback_pretrained: roberta-base
+  freeze: true            # frozen encoder -> embeddings computed once, only the aggregator trains
+  max_length: 256
+
+user_model:
+  aggregator: attention   # attention | mean (ablation)
+  hidden: 256
+  dropout: 0.2
+  max_posts: 64           # posts per user (chronological)
+  order: recent           # recent (keep last N) | chronological (keep first N)
+
+train:
+  per_device_train_batch_size: 16   # batch of USERS
+  num_train_epochs: 8
+  learning_rate: 1.0e-3             # higher LR: only the small aggregator trains
+  weight_decay: 0.01
+
+loss_weights:
+  anxiety: 1.0
+  health_anxiety: 1.5
+  depression: 1.0
