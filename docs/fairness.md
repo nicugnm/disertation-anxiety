@@ -1,0 +1,27 @@
+# Subgroup fairness audit
+
+Protected demographics are unavailable (anonymized corpus); inferring them with a classifier would be unreliable and biased. We therefore audit performance equity across **post-length tertiles** (well-powered) and **self-reported** gender/age (regex, exploratory — low coverage, self-report bias). TF-IDF anxiety model, author-disjoint split, threshold tuned on calibration (=0.632). Gaps are max−min across subgroups.
+
+_Regenerate: `python scripts/fairness_audit.py`_
+
+## Fairness gaps per stratum
+| stratum | groups | coverage | tpr_gap | fpr_gap | selection_rate_gap | equalized_odds_diff |
+|---|---|---|---|---|---|---|
+| post_length | 3 | 1.0 | 0.0604 | 0.0264 | 0.12 | 0.0604 |
+| self_reported_gender | 2 | 0.0182 | 0.0208 | 0.0074 | 0.0139 | 0.0208 |
+| self_reported_age | 3 | 0.026 | 0.0553 | 0.0332 | 0.0923 | 0.0553 |
+
+## Per-group metrics
+
+| stratum | group | n | n_pos | tpr | fpr | f1 | selection_rate |
+|---|---|---|---|---|---|---|---|
+| post_length | long | 19998 | 3022 | 0.8706 | 0.0369 | 0.838 | 0.1629 |
+| post_length | short | 20046 | 771 | 0.8547 | 0.0104 | 0.8081 | 0.0429 |
+| post_length | medium | 19956 | 1744 | 0.8102 | 0.0186 | 0.8086 | 0.0877 |
+| self_reported_gender | F | 299 | 43 | 0.8837 | 0.0391 | 0.8352 | 0.1605 |
+| self_reported_gender | M | 791 | 124 | 0.8629 | 0.0465 | 0.8168 | 0.1745 |
+| self_reported_age | 35+ | 476 | 40 | 0.85 | 0.0229 | 0.8095 | 0.0924 |
+| self_reported_age | 13-24 | 601 | 95 | 0.9053 | 0.0494 | 0.835 | 0.1847 |
+| self_reported_age | 25-34 | 484 | 74 | 0.8514 | 0.0561 | 0.7875 | 0.1777 |
+
+![fairness](figures/fairness.png)

@@ -373,6 +373,22 @@ How often does each model's anxiety decision flip when posts are lightly corrupt
 
 ---
 
+### Subgroup fairness audit
+
+Protected demographics are unavailable (anonymized corpus) and inferring them with a classifier would be unreliable and *inject* bias — so I audit equity across **post-length tertiles** (well-powered) and **self-reported** gender/age (regex, exploratory — ~2–3% coverage, self-report bias). TF-IDF anxiety model, author-disjoint split, threshold tuned on calibration. `src/evaluation/fairness.py`, `scripts/fairness_audit.py`.
+
+| stratum | TPR gap | FPR gap | sel-rate gap | equalized-odds |
+|---|---:|---:|---:|---:|
+| post_length (3 groups) | 0.060 | 0.026 | 0.120 | 0.060 |
+| self-reported gender (M/F, n≈1090) | 0.021 | 0.007 | 0.014 | 0.021 |
+| self-reported age (3 bands) | 0.055 | 0.033 | 0.092 | 0.055 |
+
+![fairness](docs/figures/fairness.png)
+
+**No large fairness violations.** Equal-opportunity (TPR) gaps are ≤0.06 and FPR gaps ≤0.033 across every stratum. (1) **By length**: recall is fairly uniform (0.81–0.87); the larger *selection-rate* gap (0.12) mostly reflects **true prevalence** (long posts are genuinely more anxious, 15% vs 4%), so equal-opportunity, not demographic-parity, is the right lens here — and it's small. (2) **By self-reported gender**: negligible gap (TPR 0.88 F vs 0.86 M). (3) **By age**: modest (younger users detected slightly better). Caveats: self-report coverage is low (exploratory), and selection-rate gaps conflate prevalence with bias. Full tables in [docs/fairness.md](docs/fairness.md).
+
+---
+
 ## Visual gallery
 
 All figures generated from the real collected data. Corpus-level figures via `anxiety plot`; experiment figures via `python scripts/run_experiments.py`.
