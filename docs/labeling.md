@@ -1,12 +1,12 @@
 # Labeling
 
-The 3-tier labeling system is the methodological centerpiece of the dissertation. It exists to address a single fundamental problem:
+The labeling pipeline addresses a single fundamental problem:
 
 > Most prior Reddit mental-health work uses **subreddit membership as the label** ("posts in r/Anxiety are anxiety-positive"). This is wrong in two directions: r/Anxiety contains plenty of non-anxious posts (questions, news, posts about a friend), and *other* subreddits (r/relationship_advice, r/COVID19_support) contain plenty of anxious ones.
 
-The 3-tier solution gives you cheap+noisy weak labels at scale, mid-cost LLM labels with reasonable quality, and a small but trustworthy human-labeled gold standard.
+Two complementary label sources are produced and used in this work: **weak labels** (cheap, noisy, corpus-wide) and **self-disclosure labels** (high-confidence, sparse). These are then aggregated into final per-row labels.
 
-## Tier 1 — weak labels (cheap, noisy)
+## Source 1 — Weak labels (cheap, noisy)
 
 `src/labeling/weak.py`. For each post:
 
@@ -18,11 +18,11 @@ weak_score(label) = w_subreddit · subreddit_prior(label) + w_lex · lexicon_sco
 - `lexicon_score(label, text)` counts hits from `src/labeling/lexicons.py` per 100 tokens, saturating at 1.0.
 - Weights and thresholds live in `configs/labeling.yaml`.
 
-The output is **probabilistic** (in [0, 1]) — downstream training can use it as a soft target or as a sample-weight, not just hard 0/1.
+The output columns are `weak_<target>` (probabilistic score in [0, 1]) and `weak_<target>_bin` (thresholded 0/1). Downstream training can use the continuous score as a soft target or as a sample weight.
 
 ### What goes in the lexicons
 
-Each list cites a clinical instrument or a psycholinguistics paper, so the methodology chapter can defend it line-by-line:
+Each list cites a clinical instrument or a psycholinguistics paper:
 
 | Lexicon | Source instrument(s) |
 |---|---|
@@ -35,122 +35,62 @@ Each list cites a clinical instrument or a psycholinguistics paper, so the metho
 | `UNCERTAINTY_TERMS` / `CERTAINTY_TERMS` | LIWC-style |
 | `BODY_PARTS` | Somatic vocabulary marker for health anxiety |
 
-### Limits — and why we need tiers 2 and 3
+## Source 2 — Self-disclosure labels (high-confidence, sparse)
 
-The lexicon-only labeller is conservative. On the real corpus we collected:
+`src/labeling/self_disclosure.py`. Implements the Coppersmith / eRisk self-disclosure protocol:
 
-```
-weak_anxiety_pos:        3,560  (22%)
-weak_depression_pos:     1,557  (10%)
-weak_suicidality_pos:      116   (1%)
-weak_health_anxiety_pos:    24   (0.15%)  ← still far too sparse to train on
-```
+1. **Positive patterns** — regex templates anchored to first-person clinical language ("I was diagnosed with X", "I have GAD", "I suffer from generalized anxiety disorder", etc.).
+2. **False-positive filters** — a candidate match is rejected if any of the following appear within ±50 characters of the match:
+   - negation ("not", "never", "n't")
+   - hypothetical ("if I were diagnosed", "I think I might have")
+   - third-party report ("my husband was diagnosed")
+   - denial / rhetorical ("turns out I don't have", "lol … depressed")
 
-The model trained on these weak labels gets F1 0.94 on r/Anxiety but **F1 = 0** on r/depression and r/SuicideWatch — because the weak labeller assigned 0 anxiety-positives there even though those posts are often co-morbidly anxious. That's the empirical motivation for tier 2.
+The output columns are `disclosure_<target>` (0/1) and `disclosure_<target>_match` (the matched substring, for traceability).
 
-## Tier 2 — LLM-assisted (mid-cost, reasonable quality)
+**Suicidality disclosure is disabled** — `SUICIDALITY_DX_PATTERNS` is empty. Suicidal ideation is not typically self-disclosed as a clinical diagnosis and carries high false-positive risk; the target falls through to the weak label only.
 
-`src/labeling/llm.py`. Sends posts to Claude with a prompt that operationalizes the codebook in `docs/codebook.md`. Returns:
-
-```json
-{
-  "anxiety": 0|1, "anxiety_conf": 1..5,
-  "health_anxiety": 0|1, "health_anxiety_conf": 1..5,
-  "depression": 0|1, "depression_conf": 1..5,
-  "suicidality": 0|1, "suicidality_conf": 1..5,
-  "rationale": "..."
-}
-```
-
-Properties:
-
-- **Stratified sampling** across `subreddit_group` (anxiety_primary, health_anxiety_enriched, etc.) keeps cost predictable. See `tier2_llm.per_group_sample` in `configs/labeling.yaml`.
-- **Cached on disk** in `.cache/llm_labels.sqlite`. Re-running the same labelling pass after a small data update is free for already-labelled rows.
-- **Rate-limited** (`tier2_llm.rpm` defaults to 30 req/min). The cache hits skip the rate-limit sleep.
-- **Free-text rationale** is preserved — useful when error-analysing later.
-
-### How we know the LLM is doing a good job
-
-Validate against tier 3: report the LLM's Cohen's κ with each human annotator. Targets in `configs/labeling.yaml` mirror the human-annotator targets:
-
-```yaml
-min_cohen_kappa:
-  anxiety: 0.70
-  health_anxiety: 0.60
-  depression: 0.65
-  suicidality: 0.75
-```
-
-If LLM-vs-human falls below these thresholds, we either tighten the prompt, switch model, or down-weight tier-2 in aggregation.
-
-## Tier 3 — manual (gold standard)
-
-`src/labeling/manual.py`. Minimal Rich-based TUI:
-
-```bash
-anxiety annotate --annotator-id alice
-```
-
-For each post the annotator sees:
-
-1. A crisis-resource banner (so distress is met with help, not silence).
-2. The cleaned post text.
-3. A prompt for `{anxiety, health_anxiety, depression, suicidality}` 0/1.
-4. A prompt for confidence 1–5.
-5. An auto-check: if `health_anxiety=1` but `anxiety=0`, ask whether to auto-set `anxiety=1` (since by codebook health anxiety implies anxiety).
-
-Annotation is **resumable** — the TUI persists every 10 rows. Two annotators can label the same posts in parallel by using different `--annotator-id` values; we then compute κ:
-
-```bash
-anxiety kappa alice bob
-```
-
-Targets:
-
-| label | min κ |
-|---|---:|
-| anxiety | 0.70 |
-| health_anxiety | 0.60 (harder; expected lower) |
-| depression | 0.65 |
-| suicidality | 0.75 (high stakes; high agreement expected) |
-
-If we miss a threshold: refine the codebook → re-annotate. The codebook itself becomes a thesis contribution.
-
-### Stratification
-
-`tier3_manual.stratify_by` (default `subreddit_group`) ensures the 1000 gold posts include all corpus regions. Otherwise the test set would be 80% baseline-subs and barely able to validate the rare classes.
+This is a **high-confidence proxy** (tier confidence 0.85 by default), following the established eRisk / Coppersmith methodology for clinical NLP in the absence of specialist annotation.
 
 ## Aggregation
 
 `src/labeling/aggregate.py`. For each label and each row:
 
-1. Take the value from the highest-precedence tier that has it (default order: `manual > llm > weak`).
-2. Record that tier in `label_<k>_source`.
-3. Record the corresponding confidence weight in `label_<k>_weight`.
-4. Drop rows that have no label from any tier (configurable).
+1. Take the value from the highest-precedence source that has it (disclosure before weak).
+2. Record that source in `label_<target>_source`.
+3. Record the corresponding confidence weight in `label_<target>_weight`.
+4. Drop rows that have no label from any source (configurable).
 
-The weights flow into model training: `label_<k>_weight` is passed as a sample weight, so the model trusts manual labels (1.0) more than LLM labels (0.7) more than weak labels (0.4). This is critical when training on a corpus where most rows are weakly labelled and only a small subset has been hand-annotated.
+The effective rule is:
+
+- If `disclosure_<target> = 1` → `label_<target> = 1` (source: `disclosure`, weight: 0.85).
+- Otherwise → `label_<target> = weak_<target>_bin` (source: `weak`, weight: 0.4).
+
+Note: a `disclosure = 0` is treated asymmetrically — it means only that the regex did not fire, not that the user is definitely non-anxious. The code therefore falls through to the weak label for `disclosure = 0` rows rather than propagating a hard negative.
+
+The `label_<target>_weight` column flows into model training as a per-sample weight.
+
+## Evaluation set
+
+The clean held-out evaluation set is the **self-disclosure test set** (`src/labeling/disclosure_dataset.py`):
+
+- **Positives**: users with at least one verified self-disclosure post.
+- **Controls**: subreddit-matched users with no disclosure, randomly sampled.
+- All users in the test set are excluded from training via `held_out_split`.
+
+This follows the eRisk user-level evaluation protocol.
 
 ## Walkthrough
 
 ```bash
-# 1) Tier 1
+# 1) Weak labels (corpus-wide)
 anxiety label --tier weak
 
-# 2) Tier 2 (needs ANTHROPIC_API_KEY)
-anxiety label --tier llm
+# 2) Self-disclosure labels (corpus-wide)
+# (run automatically as part of the aggregate step, or standalone)
 
-# 3) Tier 3 — first annotator
-anxiety annotate --annotator-id alice
-
-# 3') Tier 3 — second annotator (in parallel)
-anxiety annotate --annotator-id bob
-
-# 4) Inter-annotator agreement
-anxiety kappa alice bob
-
-# 5) Aggregate everything into final labels
+# 3) Aggregate into final labels
 anxiety label --tier aggregate
 ```
 
-After step 5, `data/processed/labeled.parquet` has a `label_<k>` column per target, sourced from the best available tier per row, ready for model training.
+After aggregation, `data/processed/labeled.parquet` has a `label_<target>` column per target, sourced from the best available tier per row, ready for model training.

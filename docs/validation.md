@@ -12,9 +12,9 @@ This document covers all three.
 
 ## 1. Label validation — how "anxiety = true" is decided
 
-### The 3-tier system in one paragraph
+### The labeling system in one paragraph
 
-We never trust a single labeling source. Tier 1 (weak: subreddit prior + lexicon) is cheap and noisy; tier 2 (LLM with the codebook prompt) is mid-cost and reasonable; tier 3 (manual annotation by humans following the codebook) is the gold standard. The final label per row is `manual > llm > weak` (precedence), with each tier's confidence flowing into the training loss as a sample weight.
+Two label sources are produced and used in practice. **Tier 1 (weak)**: subreddit prior + lexicon overlap, thresholded → `weak_<target>` / `weak_<target>_bin`. **Self-disclosure**: regex diagnosis patterns with negation/hypothetical/third-party/denial filters → `disclosure_<target>`. Suicidality disclosure is intentionally disabled. The confidence weights `disclosure=0.85`, `weak=0.4` are used where disclosure provides a positive signal (a disclosure `0` is not treated as strong negative evidence and falls through to the weak label).
 
 ### Tier 1 — weak labels
 
@@ -85,45 +85,7 @@ weak_suicidality_pos:      116   (1%)   — sparse
 weak_health_anxiety_pos:    24   (0.15%) — still far too sparse to train on
 ```
 
-The model trained on these weak labels achieves F1 0.94 on r/Anxiety but **F1 = 0** on r/depression and r/SuicideWatch — because the weak labeller assigned 0 anxiety-positives there even though those posts are often co-morbidly anxious. **This is the empirical case for tier 2 LLM labelling**, exactly as predicted in the methodology.
-
-### Tier 2 — LLM-assisted
-
-`src/labeling/llm.py` sends each post to Claude (default `claude-sonnet-4-6`) with:
-
-- A system prompt establishing that the LLM is acting as a trained annotator following a published codebook.
-- A user prompt that operationalizes `docs/codebook.md` into structured rules.
-- A required JSON response with binary labels + 1–5 confidence + ≤30-word rationale.
-
-Caching is on by default (`.cache/llm_labels.sqlite`, key = SHA-256 of prompt + post + model). Re-runs are free. Stratified sampling across `subreddit_group` keeps the cost predictable.
-
-#### Why we trust tier 2: validation against tier 3
-
-Cohen's κ is computed between the LLM's labels and each human annotator on the gold subset. Targets in `configs/labeling.yaml`:
-
-```yaml
-min_cohen_kappa:
-  anxiety: 0.70
-  health_anxiety: 0.60   # harder; expected lower
-  depression: 0.65
-  suicidality: 0.75       # high stakes; high agreement expected
-```
-
-If LLM-vs-human falls below these, the methodology says: tighten the prompt, switch model, or down-weight tier-2 in aggregation.
-
-### Tier 3 — manual annotation
-
-`src/labeling/manual.py`. The codebook (`docs/codebook.md`) operationalizes 4 binary labels with:
-
-- Positive markers (decision rules for "yes")
-- Negative markers (decision rules for "no")
-- Borderline-case rules (the hard health-anxiety boundary)
-- Annotator-safety procedures (skip distressing posts; crisis-resource banner)
-- A 1–5 confidence scale
-
-Two annotators label ~1000 posts independently. Cohen's κ targets above. Disagreements are adjudicated by discussion; irresolvable cases are dropped from the test set.
-
-The codebook itself is a thesis contribution.
+The model trained on these weak labels achieves F1 0.94 on r/Anxiety but **F1 = 0** on r/depression and r/SuicideWatch — because the weak labeller assigned 0 anxiety-positives there even though those posts are often co-morbidly anxious. This motivates the self-disclosure tier.
 
 ### Aggregation — final labels
 
@@ -132,12 +94,12 @@ The codebook itself is a thesis contribution.
 ```python
 for each row, for each label:
     pick the value from the highest-precedence tier that has it
-    (default order: manual > llm > weak)
+    (default order: disclosure > weak)
     record the source in label_<k>_source
     record the confidence in label_<k>_weight
 ```
 
-The weights flow into model training: `label_<k>_weight` is passed as a sample weight, so the model trusts manual labels (1.0) more than LLM labels (0.7) more than weak labels (0.4).
+The weights flow into model training: `label_<k>_weight` is passed as a sample weight. The effective weights are `disclosure=0.85` (positive signal only — a disclosure `0` falls through to weak) and `weak=0.4`.
 
 ### How does the codebook prevent ambiguity?
 
@@ -235,7 +197,6 @@ Real example, our TF-IDF baseline on anxiety: F1 0.88, AUROC 0.97, **ECE 0.20** 
 | XGBoost | **Early stopping** (30 rounds against val set), `subsample=0.8`, `colsample_bytree=0.8`, max_depth limited (6), low learning rate (0.05), `scale_pos_weight=auto` |
 | Transformer | `weight_decay=0.01`, `warmup_ratio=0.1`, eval each epoch, `load_best_model_at_end=True`, `metric_for_best_model=f1` |
 | Multi-task | Same weight decay + **per-row sample weights** from tier_confidence (downweights noisy labels) + per-task loss weights to prevent collapse on rare classes |
-| Claude zero-shot | No fitting → can't overfit by definition; tests whether the fine-tuned models even add value |
 
 ### Distribution-shift detection — the most diagnostic single tool
 
@@ -256,7 +217,7 @@ AnxietyDepression   198    104   0.86
 
 This **immediately** tells the thesis reader that:
 1. The model is not just memorizing TF-IDF features that happen to occur in r/Anxiety — it transfers.
-2. Tier-1 weak labels assigned **zero anxiety-positives in r/SuicideWatch / r/depression**, so the model never learns to predict positive there. This is the empirical motivation for tier-2.
+2. Tier-1 weak labels assigned **zero anxiety-positives in r/SuicideWatch / r/depression**, so the model never learns to predict positive there. This is an empirical limitation of the weak labels.
 
 ### Length-effect bins
 
@@ -283,6 +244,22 @@ If the model trained only on anxiety-primary subreddits achieves F1 ≈ 0.4 on r
 
 `error_analysis.hardest_examples(df, target, n=20)` returns the 20 posts with the largest |score − label| — i.e. the most-confidently-wrong predictions. These go in the appendix or qualitative analysis chapter.
 
+### User-level self-disclosure evaluation (the clean evaluation set)
+
+`src/labeling/disclosure_dataset.py` + `anxiety eval-disclosure`. This is the primary evaluation set graded against real signal rather than weak labels:
+
+- **Positives**: users who ever posted a verified self-disclosure for a given target (regex + filters from `self_disclosure.py`).
+- **Controls**: never-disclosed users sampled from the same subreddits as the positives (subreddit-matched, to prevent cheating via subreddit style). Controls must have ≥3 posts.
+- All posts by test users are held out from training (`held_out_split=True` in the corpus).
+
+Metrics are computed at the **user level** by aggregating per-post scores (mean / max / top-5-mean). Two modes: with disclosure posts included vs with them masked, to test whether the model learned implicit signal beyond the disclosure phrase itself.
+
+Results are aggregated by `scripts/report_disclosure_eval.py`.
+
+### r/HealthAnxiety vs r/Anxiety head-to-head (Experiment 8)
+
+`scripts/exp_ha_vs_anxiety.py`. Tests whether health-anxiety language is separable from general-anxiety language with an **author-disjoint** train/test split (Harrigian et al. — no author appears in both train and test). Baseline to beat: Low et al. (2020) SGD-L1 weighted-F1 = 0.851 on the same subreddit-as-proxy setup. MentalRoBERTa achieves weighted-F1 **0.906** / AUROC **0.955** on submissions, a +0.055 improvement over the Low 2020 baseline.
+
 ---
 
 ## What this means for the thesis
@@ -290,8 +267,8 @@ If the model trained only on anxiety-primary subreddits achieves F1 ≈ 0.4 on r
 A reader can challenge any prediction in the results chapter and you have an answer:
 
 - **"How do you know it's not just learning subreddit style?"** → Per-subreddit F1 table + cross-subreddit transfer experiment.
-- **"How do you know your weak labels are correct?"** → Cohen's κ between weak and gold subset.
-- **"How do you handle health-anxiety scarcity?"** → Tier-2 LLM enrichment, per-task loss weights in multi-task, sample-weight aggregation.
+- **"How do you know your labels are correct?"** → Self-disclosure labels (Coppersmith/eRisk standard) are used as the clean evaluation signal; disclosed users are positives held out from training. Weak labels are acknowledged as noisy training signal only, not evaluation ground truth.
+- **"How do you handle health-anxiety scarcity?"** → Per-task loss weights in multi-task, sample-weight aggregation from label confidence tiers, and the self-disclosure test set provides user-level clean evaluation. The continuous weak health-anxiety score (Experiment 5) correctly identifies the COVID subreddits as the most health-anxious, consistent with clinical expectations.
 - **"Aren't your linguistic markers just artifacts of your lexicon?"** → SHAP on XGBoost (model never saw the lexicons; it saw rates) + cross-feature significance with BH-FDR correction.
 - **"Are your predictions reliable?"** → Bootstrap CIs on every metric; reliability diagram; ECE.
 - **"Could a confounder explain the result?"** → Length-effect bins, subreddit subgroup analysis, temporal split.

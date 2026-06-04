@@ -37,49 +37,67 @@ After `clean → anonymize → dedupe`. Same schema as raw, **with these changes
 
 ## Stage 3 — `data/processed/labeled.parquet`
 
-All Stage-2 columns plus the labeling columns produced by `apply_weak_labels`, `label_corpus` (LLM), `annotate` (manual), and `aggregate_labels`.
+All Stage-2 columns plus the labeling columns produced by `apply_weak_labels` (Tier-1) and `apply_disclosure_labels` (Tier-2 self-disclosure), followed by `aggregate_labels`.
 
-### Tier-1 (weak) columns
+### Tier-1 (weak) columns — always present
 
 | column | type | description |
 |---|---|---|
-| `weak_anxiety` | float64 | Probabilistic weak score in [0, 1]: subreddit_prior_weight × subreddit_prior + lexicon_weight × lex_score. |
+| `weak_anxiety` | float64 | Probabilistic weak score in [0, 1]: `subreddit_prior_weight × subreddit_prior + lexicon_weight × lex_score`. |
 | `weak_health_anxiety` | float64 | Same, for health-anxiety target. |
 | `weak_depression` | float64 | Same. |
 | `weak_suicidality` | float64 | Same. |
 | `weak_<k>_bin` | int64 | 1 if `weak_<k> ≥ tier1_weak.thresholds[<k>]`, else 0. |
 
-### Tier-2 (LLM) columns — present only on rows that were sent to the LLM
+### Tier-2 (self-disclosure) columns — always present
+
+Produced by `src/labeling/self_disclosure.py`: regex diagnosis phrases filtered by negation, hypothetical, third-party, and denial checks. Suicidality patterns are intentionally empty (no `disclosure_suicidality` positives).
 
 | column | type | description |
 |---|---|---|
-| `llm_anxiety` | int64 | 0 or 1. |
-| `llm_anxiety_conf` | int64 | LLM-reported confidence 1–5. |
-| `llm_<k>` / `llm_<k>_conf` | int64 | Same shape for the other 3 targets. |
-| `llm_rationale` | string | ≤30-word free-text rationale from the LLM. Useful for error analysis. |
-
-### Tier-3 (manual) columns — present only after `anxiety annotate`
-
-| column | type | description |
-|---|---|---|
-| `annotator_id` | string | Free-form annotator identifier (used to compute κ). |
-| `manual_anxiety` | int64 | 0 or 1. |
-| `manual_<k>` | int64 | Same for the other 3 targets. |
-| `manual_confidence` | int64 | 1–5 self-reported. |
+| `disclosure_anxiety` | int64 | 1 if a verified first-person anxiety diagnosis disclosure was detected; 0 otherwise. |
+| `disclosure_health_anxiety` | int64 | Same, for health-anxiety. |
+| `disclosure_depression` | int64 | Same, for depression. |
+| `disclosure_suicidality` | int64 | Always 0 — suicidality self-disclosure is disabled by design. |
+| `disclosure_<k>_match` | string\|null | The matched substring that triggered the disclosure flag (for traceability / audit). Null when `disclosure_<k>=0`. |
 
 ### Aggregated columns (final labels, used for training)
 
 | column | type | description |
 |---|---|---|
-| `label_<k>` | float64 | Final label for target `<k>`, picked from manual > llm > weak based on `aggregate.precedence`. |
-| `label_<k>_source` | string | `'manual'` \| `'llm'` \| `'weak'` \| null. |
-| `label_<k>_weight` | float64 | Confidence weight from `aggregate.tier_confidence`. Flows into the loss for confidence-weighted training. |
+| `label_<k>` | float64 | Final label for target `<k>`, resolved with precedence disclosure > weak (see `aggregate.py`): `disclosure_<k>` when the disclosure flag is 1, otherwise `weak_<k>_bin`. |
+| `label_<k>_source` | string | `'disclosure'` or `'weak'`. Null only if neither tier produced a label. |
+| `label_<k>_weight` | float64 | Confidence weight from `aggregate.tier_confidence` (disclosure = 0.85, weak = 0.5 by default). Flows into the loss for confidence-weighted training. |
+
+### Held-out split column — present after `build-disclosure-testset`
+
+| column | type | description |
+|---|---|---|
+| `held_out_split` | bool | True for every post authored by a user in the disclosure test set (positives + matched controls). These rows are excluded from training by default. |
 
 ### Helper columns added at runtime
 
 | column | type | description |
 |---|---|---|
 | `subreddit_group` | string | Group from `subreddits.yaml` (e.g. `anxiety_primary`, `health_anxiety_enriched`). Used for stratified sampling. |
+
+## Stage 3b — `data/processed/disclosure_testset.parquet`
+
+Posts by test users (disclosed positives + subreddit-matched controls), produced by `anxiety build-disclosure-testset`. Contains all Stage-3 columns plus:
+
+| column | type | description |
+|---|---|---|
+| `user_anxiety` | int64 | 1 if the post's author ever disclosed anxiety (user-level label). |
+| `user_health_anxiety` | int64 | Same, for health-anxiety. |
+| `user_depression` | int64 | Same, for depression. |
+| `user_group` | string | `'disclosed_<target>[+<target>...]'` for positives or `'matched_control'` for controls. |
+| `is_disclosure_post` | int64 | 1 if this specific post is one of the disclosure utterances. Lets evaluators mask them and report both "full history" and "implicit-signal-only" metrics. |
+
+`data/processed/disclosure_testset__users.csv` — one row per test user (`author_hash`, `user_<target>`, `user_group`, `n_posts`, `subreddits`).
+
+## Stage 3c — `experiments/runs/<name>/eval/<model>__<target>__disclosure_userlevel.json`
+
+Output of `anxiety eval-disclosure`. User-level metrics (precision, recall, F1, AUROC) on the disclosure test set, including results with `mask_disclosure_posts=True` (implicit-signal-only evaluation).
 
 ## Stage 4 — `experiments/runs/<name>/{train,val,test}.parquet`
 
@@ -106,6 +124,4 @@ Output of the evaluator. One row per test example.
 | `experiments/runs/<name>/eval/<model>__<target>__by_subreddit.csv` | Per-subreddit F1, P, R, n, n_pos. |
 | `experiments/runs/<name>/eval/<model>__<target>__by_length.csv` | Equal-frequency length-bin F1. |
 | `experiments/markers__<target>.csv` | Linguistic-marker comparison: Cohen's d, Mann-Whitney U, BH-corrected p-values. |
-| `.cache/llm_labels.sqlite` | Tier-2 response cache. |
-| `.cache/llm_zero_shot.sqlite` | Zero-shot model response cache. |
 | `.cache/json_scraper.sqlite` | HTTP response cache for the no-creds scraper. |

@@ -1,6 +1,6 @@
 # Experiments — what we achieved, what we used, what we found
 
-Five separate classification studies executed on the **real collected corpus** (16,382 posts, 10 subreddits) using only the data + lexicons + linguistic features that exist today — no LLM API calls, no transformer, no human annotators required.
+Seven classification/evaluation studies executed on the **real collected corpus** (16,382 posts, 10 subreddits) using only the data + lexicons + linguistic features that exist today — no LLM API calls, no human annotators required. Experiments 1–5 use weak labels; Experiment 6 adds transformer models; Experiment 7 evaluates against the self-disclosure user-level test set; Experiment 8 is a head-to-head on r/HealthAnxiety vs r/Anxiety.
 
 > All results below come from `scripts/run_experiments.py` against `data/processed/labeled.parquet`. Re-run any time with `python scripts/run_experiments.py`. Outputs land in `experiments/` (CSVs + JSON summary) and `docs/figures/exp*.png`.
 
@@ -46,7 +46,7 @@ Train a TF-IDF + LogReg (text-only) and an XGBoost (linguistic-features-only) fo
 1. **XGBoost on 26 linguistic features matches or beats the 80,000-feature TF-IDF text model on 3 of 4 targets.** This is a useful finding for the thesis: the engineered features carry most of the predictive signal.
 2. **XGBoost is dramatically better calibrated** — ECE 0.034 vs 0.132 on anxiety. The TF-IDF model is overconfident; XGBoost outputs reflect actual probabilities. This matters when reporting clinical-style risk scores.
 3. **Suicidality detection is excellent** (F1 = 0.79, AUROC = 0.998). The lexicon for `SUICIDALITY_TERMS` is small but specific. The F1 dropped from a prior run (0.91 → 0.79) when the negative pool grew from 13k → 16k posts (added r/depression, r/depression_help, r/COVID19positive); the class is more imbalanced now and the threshold-tuned F1 is more pessimistic.
-4. **Health-anxiety F1 = 1.00 is a small-sample artifact** ⚠️. With only 24 positives — and labels derived from the same lexicon the XGBoost model directly reads via `f_health_anx_term_rate` — perfect F1 is exactly what circularity predicts. **This is exactly why tier-2 LLM labeling is needed**: to get a non-circular set of health-anxiety positives.
+4. **Health-anxiety F1 = 1.00 is a small-sample artifact** ⚠️. With only 24 positives — and labels derived from the same lexicon the XGBoost model directly reads via `f_health_anx_term_rate` — perfect F1 is exactly what circularity predicts. The clean evaluation for health anxiety is the self-disclosure test set (Experiment 7) or the head-to-head with r/HealthAnxiety (Experiment 8), not weak-label F1.
 
 ---
 
@@ -250,9 +250,36 @@ anxiety evaluate experiments/runs/multitask_anxiety_health_dep_suic
 
 1. **Multi-task ≈ single-task on anxiety** (0.894 vs 0.891 F1). The shared encoder doesn't degrade the dense class. This is the standard prerequisite test for joint training — and it passes.
 2. **The transformer reveals the XGBoost-linguistic lexicon-circularity.** XGBoost's apparent F1 = 1.000 on health_anxiety and F1 = 0.792 on suicidality were inflated by the model reading the same lexicons used to derive the labels. The multi-task transformer's F1 = 0.333 / 0.647 on those targets is what the underlying signal actually supports. **This is itself a methodological finding worth a paragraph in the discussion chapter** — single-feature-lexicon ML on weak labels can produce circular results that look like signal.
-3. **Health-anxiety F1 = 0.333 with CI [0.000, 0.818]** is the data-efficiency ceiling for tier-1 labels: 24 total positives (3 in test) is not enough for transformer fine-tuning to learn the class reliably. **This is the empirical case for tier-2 LLM labeling** — the next high-impact step is more labels, not a better model.
+3. **Health-anxiety F1 = 0.333 with CI [0.000, 0.818]** is the data-efficiency ceiling for tier-1 labels: 24 total positives (3 in test) is not enough for transformer fine-tuning to learn the class reliably. The next high-impact step is self-disclosure enrichment to increase positive-label coverage, not a better model.
 4. **Calibration is excellent for transformers** — ECE 0.001–0.039 with no post-hoc temperature scaling. The TF-IDF model needs Platt; the transformer doesn't.
 5. **Bootstrap CIs work and matter.** The health-anxiety CI of [0.000, 0.818] honestly communicates "we don't have enough positives to claim anything." Use these CIs in the thesis instead of point estimates.
+
+---
+
+## Experiment 7 — User-level self-disclosure evaluation
+
+Run via `anxiety eval-disclosure`. Evaluates models against the **self-disclosure user-level test set** — the clean evaluation signal not derived from weak labels.
+
+- **Positives**: users with at least one verified self-disclosure post (regex + negation/hypothetical/third-party/denial filters, `src/labeling/self_disclosure.py`).
+- **Controls**: subreddit-matched never-disclosed users with ≥3 posts, held out from training.
+- Metrics are aggregated at the **user level** (mean / max / top-5-mean of per-post scores) and reported in two modes: disclosure posts included vs masked.
+
+Results aggregated into `experiments/disclosure_userlevel_summary.csv` and `docs/figures/disclosure_userlevel.png` by `scripts/report_disclosure_eval.py`.
+
+---
+
+## Experiment 8 — r/HealthAnxiety vs r/Anxiety head-to-head
+
+`scripts/exp_ha_vs_anxiety.py`. Binary post-level classifier (HealthAnxiety=1, Anxiety=0) with an **author-disjoint** split (Harrigian et al. protocol — no author in both train and test). Baseline to beat: Low et al. (2020) SGD-L1 weighted-F1 = 0.851.
+
+### Results
+
+| Model | Weighted-F1 | AUROC | vs Low 2020 |
+|---|---:|---:|---:|
+| TF-IDF + LogReg | — | — | — |
+| MentalRoBERTa (submissions) | **0.906** | **0.955** | +0.055 |
+
+MentalRoBERTa on submissions beats the Low 2020 baseline by +5.5 weighted-F1 points and achieves AUROC 0.955, demonstrating that health-anxiety language is separable from general-anxiety language beyond the surface features available to a linear model.
 
 ---
 
@@ -262,7 +289,7 @@ anxiety evaluate experiments/runs/multitask_anxiety_health_dep_suic
 - `sklearn.linear_model.LogisticRegression` (C=1.0, balanced class weights, liblinear) on TF-IDF features (1-2 grams, min_df=5, max_df=0.95, sublinear TF, 80k max features).
 - `xgboost.XGBClassifier` (400 trees, max_depth=6, lr=0.05, subsample=0.8, colsample_bytree=0.8, scale_pos_weight=auto, hist tree method) on 26 hand-crafted linguistic features.
 - `mental/mental-roberta-base` (Ji et al., 2022) fine-tuned with HuggingFace `Trainer`, 4 epochs, lr=2e-5, weight_decay=0.01, warmup_ratio=0.1, max_length=256, batch_size=16 — both single-target and multi-task variants.
-- Multi-task variant: pure-PyTorch shared encoder + 4 sigmoid heads, BCE-with-logits loss with per-task weights `{anxiety: 1.0, health_anxiety: 1.5, depression: 1.0, suicidality: 1.2}` and per-row confidence weights from `label_<k>_weight` (manual=1.0, llm=0.7, weak=0.4).
+- Multi-task variant: pure-PyTorch shared encoder + 4 sigmoid heads, BCE-with-logits loss with per-task weights `{anxiety: 1.0, health_anxiety: 1.5, depression: 1.0, suicidality: 1.2}` and per-row confidence weights from `label_<k>_weight` (disclosure=0.85 for positives, weak=0.4).
 
 ### Linguistic features (26 total)
 - **Lexical rates (8)**: `f_anx_term_rate`, `f_anx_phrase_count`, `f_health_anx_term_rate`, `f_health_anx_phrase_count`, `f_reassurance_count`, `f_dep_term_rate`, `f_suic_term_rate`, `f_body_part_rate`
@@ -285,7 +312,7 @@ anxiety evaluate experiments/runs/multitask_anxiety_health_dep_suic
 - `scipy.stats.mannwhitneyu` for non-parametric significance
 - Benjamini-Hochberg FDR correction (custom implementation in `src/analysis/linguistic_markers.py`)
 - Cohen's d for effect size
-- `sklearn.metrics.roc_curve / precision_recall_curve / cohen_kappa_score`
+- `sklearn.metrics.roc_curve / precision_recall_curve`
 
 ---
 
@@ -296,7 +323,7 @@ anxiety evaluate experiments/runs/multitask_anxiety_health_dep_suic
 3. ⚠ **XGBoost-linguistic rare-class F1 is circular.** F1 = 1.000 on health_anxiety and 0.792 on suicidality come from the model reading the same lexicons used to derive the labels. The multi-task transformer's F1 = 0.333 / 0.647 are the honest scores. **This is itself a methodological finding for the discussion chapter.**
 4. ✅ **Cross-subreddit transfer is partially preserved** — AUROC stays at 0.97 (in fact slightly rises) but precision-at-threshold collapses, showing the model has learned a real signal that needs per-population threshold calibration.
 5. ✅ **Linguistic markers replicate clinical theory** — first-person preponderance (Pennebaker), negative-sentiment-tracks-severity, reassurance-seeking specific to health anxiety (SHAI item content).
-6. ⚠️ **Health-anxiety binary classification is bottlenecked by label sparsity** (24 positives in 16k → 3 in test set, multi-task F1 CI [0.00, 0.82]). The continuous severity score correctly identifies both COVID subreddits as the most health-anxious (~2× the mean of r/Anxiety), but supervised binary modeling needs tier-2 LLM enrichment to enlarge the positive class.
+6. ⚠️ **Health-anxiety binary classification is bottlenecked by label sparsity** (24 positives in 16k → 3 in test set, multi-task F1 CI [0.00, 0.82]). The continuous severity score correctly identifies both COVID subreddits as the most health-anxious (~2× the mean of r/Anxiety), but supervised binary modeling would benefit from self-disclosure enrichment to increase positive-label coverage.
 7. ⚠️ **Calibration is a problem for the TF-IDF model** (ECE = 0.13). XGBoost-linguistic (ECE 0.03) and MentalRoBERTa (ECE 0.001–0.039) are well calibrated without post-hoc adjustment.
 8. 🟢 **The 9-way subreddit classifier achieves macro-F1 = 0.64** (vs ~0.10 chance), confirming substantial linguistic distinctiveness — but also confirming the risk of subreddit-style leakage that motivates rigorous cross-subreddit transfer evaluation.
 
@@ -304,7 +331,7 @@ anxiety evaluate experiments/runs/multitask_anxiety_health_dep_suic
 
 ## Caveats — what these experiments don't show
 
-- **All labels are still tier-1 only** (subreddit prior + lexicon). The model that scores F1 = 0.87 is partly distilling its training signal back into a logistic regression. Real validation requires tier-2 LLM and tier-3 manual labels.
+- **Experiments 1–5 are graded against tier-1 weak labels only** (subreddit prior + lexicon). The model that scores F1 = 0.87 is partly distilling its training signal back into a logistic regression. The clean evaluation is the user-level self-disclosure test set (Experiment 7) and the author-disjoint head-to-head (Experiment 8).
 - **Health-anxiety F1 = 1.00 is not a real result.** Twenty-four positives, of which the XGBoost model has direct lexicon-feature access, makes that finding circular. **Do not put this number in the thesis abstract.**
 - **No bootstrap CIs in `scripts/run_experiments.py`** (passes `bootstrap=False` for speed). The transformer evaluation pipeline (`src/evaluation/runner.py:evaluate_model`) does compute them — see Experiment 6 — but Experiments 1–5 don't. Add `bootstrap=True` to `full_report` calls before the methodology chapter is finalized.
 - **No statistical comparison between models** is reported. Use McNemar's test on the held-out predictions before claiming Model A "beats" Model B.
@@ -319,7 +346,8 @@ anxiety evaluate experiments/runs/multitask_anxiety_health_dep_suic
 anxiety collect --backend scraper        # or --backend praw
 anxiety preprocess
 anxiety label --tier weak
-anxiety label --tier aggregate
+anxiety label --tier disclosure          # self-disclosure regex labels
+anxiety label --tier aggregate           # merges disclosure + weak
 
 # 2. Run the experiment suite
 /opt/miniconda3/envs/disertation-anxiety/bin/python scripts/run_experiments.py

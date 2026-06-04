@@ -26,8 +26,6 @@ Top MCP Servers:
 
 ### MCP Servers to Activate
 - [ ] None required for day-to-day work.
-      The pipeline uses the Anthropic SDK directly for tier-2 LLM labeling —
-      requires `ANTHROPIC_API_KEY` in a local `.env` (never committed).
 
 ### Skills to Know About
 - [/agents](https://docs.claude.com/en/docs/claude-code/sub-agents) — manage

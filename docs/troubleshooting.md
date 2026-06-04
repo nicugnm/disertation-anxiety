@@ -59,20 +59,6 @@ We catch `LangDetectException` and default to `'en'` to avoid dropping posts. If
 
 ## Labeling
 
-### `ANTHROPIC_API_KEY not set` during `anxiety label --tier llm`
-
-Add the key to `.env`:
-
-```bash
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
-Then `source .env` (or just re-run — `python-dotenv` loads `.env` automatically via `cli.py`).
-
-### LLM labeling is suspiciously fast
-
-The cache is doing its job — re-labelling already-labelled posts is free. To force a re-label, delete `.cache/llm_labels.sqlite` (or the relevant rows).
-
 ### `KeyError: 'subreddit_group'` during stratified sampling
 
 The labeled DataFrame doesn't have `subreddit_group` because no `attach_subreddit_groups` step ran. The `label_corpus` function does this automatically; if you're calling internals manually, run it first.
@@ -107,9 +93,8 @@ HuggingFace renamed this argument in transformers 4.42. Our `transformer.py` han
 
 ### Multi-task training F1 stuck at 0 for the rare class
 
-Health-anxiety has very few weak-label positives. Either:
+Health-anxiety has very few weak-label positives. Options:
 
-- Run tier-2 LLM labelling first (`anxiety label --tier llm`) to enrich the positive class.
 - Bump the loss weight: `loss_weights.health_anxiety: 2.0` in `configs/models/multitask.yaml`.
 - Enable focal loss (not implemented; would be a small change in `multitask.py`).
 
@@ -200,11 +185,11 @@ The transformer's `_device_select` auto-picks the best available.
 
 ### `.cache/` is huge
 
-Mostly LLM responses + scraper responses. Safe to delete; you'll re-pay the cost on the next run.
+Mostly scraper responses. Safe to delete; you'll re-pay the cost on the next run.
 
 ```bash
 ls -lh .cache/
-rm .cache/llm_zero_shot.sqlite   # specific cache
+rm .cache/json_scraper.sqlite   # specific cache
 ```
 
 ### Parquet shards are smaller than I expected

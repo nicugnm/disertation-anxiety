@@ -8,7 +8,7 @@ Start here. The README has the high-level tour and visual gallery; this folder i
 2. [`experiments.md`](experiments.md) — **what we achieved**: 5 classification studies on real data, with numbers + plots + findings
 3. [`thesis_outline.md`](thesis_outline.md) — chapter-by-chapter dissertation map
 4. [`architecture.md`](architecture.md) — module-by-module design
-5. [`labeling.md`](labeling.md) — the 3-tier labeling system
+5. [`labeling.md`](labeling.md) — the labeling scheme (tier-1 weak + self-disclosure)
 6. [`validation.md`](validation.md) — overfitting prevention, data correctness, prediction validation
 7. [`models.md`](models.md) — per-model docs
 8. [`data_dictionary.md`](data_dictionary.md) — column-level schema reference

@@ -10,7 +10,6 @@ How to reproduce every artifact in this repo from a fresh clone.
 | Dependency versions | Pinned with `>=` in `pyproject.toml`; for exact reproduction, use `pip freeze > requirements.txt` post-install |
 | Random seeds | Every model config has `random_state` (default 42); splitting and bootstrap CIs use it too |
 | Reddit scraping | All HTTP responses cached in `.cache/json_scraper.sqlite`; same cache file → same posts |
-| LLM labeling | All API responses cached in `.cache/llm_labels.sqlite` (key = SHA-256 of model + prompt + post) |
 | Synthetic data | Per-subreddit deterministic RNG seeded from `(seed, subreddit_name)` |
 
 ## Reproduction recipe
@@ -66,19 +65,17 @@ anxiety preprocess --no-ner
 
 ```bash
 anxiety label --tier weak
-anxiety label --tier llm        # only if ANTHROPIC_API_KEY is set
+anxiety label --tier disclosure
 anxiety label --tier aggregate
 ```
 
-The LLM cache (`.cache/llm_labels.sqlite`) makes tier-2 reproducible across runs and machines if you share the cache.
-
-### 4. Annotate (manual)
+### 4. Build the disclosure test set
 
 ```bash
-anxiety annotate --annotator-id alice
-anxiety annotate --annotator-id bob
-anxiety kappa alice bob
+anxiety build-disclosure-testset
 ```
+
+This creates `data/processed/disclosure_testset.parquet` (posts by disclosed users + subreddit-matched controls) and marks `held_out_split=True` in `data/processed/labeled.parquet` for all test-set users. The training step automatically excludes held-out posts.
 
 ### 5. Train
 
@@ -96,8 +93,14 @@ Each saves to `experiments/runs/<name>/` with the model + train/val/test splits 
 ```bash
 anxiety evaluate experiments/runs/tfidf_logreg
 anxiety evaluate experiments/runs/xgboost_linguistic
+anxiety evaluate experiments/runs/mentalbert_anxiety
+anxiety evaluate experiments/runs/multitask_anxiety_health_dep_suic
 # ...etc
 anxiety report experiments/runs/tfidf_logreg/eval
+
+# User-level disclosure evaluation (Experiment 7)
+anxiety eval-disclosure experiments/runs/tfidf_logreg --target anxiety
+anxiety eval-disclosure experiments/runs/mentalbert_anxiety --target anxiety
 ```
 
 ### 7. Analyze + plot
@@ -133,8 +136,7 @@ pip freeze > snapshot/requirements.lock.txt
 cp -r configs snapshot/
 cp -r experiments/runs/*/eval snapshot/eval/
 cp experiments/markers__*.csv snapshot/
-# Note: do NOT copy data/raw, data/interim, or .cache/llm_labels.sqlite
-# (the cache contains paraphrased post text from prompts).
+# Note: do NOT copy data/raw or data/interim (raw text, not for redistribution).
 ```
 
 ## Reproducibility checklist for the thesis
@@ -145,9 +147,8 @@ When writing the methodology chapter, document:
 - [ ] Backend used (PRAW / scraper / dump).
 - [ ] Sub list + version of `configs/subreddits.yaml`.
 - [ ] Lexicon version + provenance for each list.
-- [ ] LLM model + prompt version (the prompt template is in `src/labeling/llm.py`).
-- [ ] Annotator demographics (high-level only, no PII).
-- [ ] Inter-annotator κ for each label.
+- [ ] Self-disclosure regex patterns and false-positive filter rules (in `src/labeling/self_disclosure.py`).
+- [ ] Disclosure test set construction: positives selection, subreddit-matched control sampling, `held_out_split` enforcement.
 - [ ] Pretrained model checkpoint name + revision.
 - [ ] Random seeds + library versions (from `pip freeze`).
 - [ ] Test set IDs (releasable).

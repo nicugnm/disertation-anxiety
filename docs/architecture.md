@@ -7,7 +7,7 @@ A module-by-module deep dive. The repo is built so that any single stage can be 
 1. **Configs drive behavior.** YAML in `configs/` controls every parameter that has a research justification. No code change should ever be needed to add a subreddit or a model.
 2. **Common interfaces.** `BaseCollector` and `BaseModel` give every backend / model a uniform contract. New backends and models become drop-ins.
 3. **Stable schema.** Every stage reads parquet, writes parquet, and never mutates upstream stages.
-4. **Reproducibility by default.** All randomness is seeded; LLM calls are cached on disk; collection is deterministic given a config.
+4. **Reproducibility by default.** All randomness is seeded; collection is deterministic given a config.
 5. **Ethics at the layer that enforces it.** Anonymization is a module, not a checklist — `src/preprocessing/anonymize.py` is called by the pipeline so no model can ever see un-anonymized text.
 
 ## Data flow
@@ -56,7 +56,7 @@ Foundation. Touched by every other module.
 - **`config.py`** — Pydantic models for every YAML config (subreddits, labeling, model). Strong typing means a typo in a config file errors at load time, not three steps into a run.
 - **`io.py`** — parquet, JSONL, and `.zst`-compressed JSONL streaming. The `.zst` reader is what makes the dump backend feasible: it streams without loading the whole file into memory.
 - **`logging.py`** — structlog with optional JSON output (good for batch jobs and MLflow capture).
-- **`cache.py`** — SQLite-backed key-value cache. Keys are SHA-256 of (model, prompt, post) so re-running an LLM labeling pass is free.
+- **`cache.py`** — SQLite-backed key-value cache for scraper responses. Keys are SHA-256 of the request so re-scraping already-seen URLs is free.
 
 ### `src/collection/`
 
@@ -105,13 +105,13 @@ Transforms raw → interim. Composable functions that the `pipeline.py` runner c
 
 ### `src/labeling/`
 
-The methodological centerpiece. Three tiers + an aggregator.
+The methodological centerpiece. Two label sources + an aggregator.
 
 - **`lexicons.py`** — small, transparent word lists derived from clinical instruments (GAD-7, SHAI, PHQ-9, C-SSRS) and the social-media mental-health literature (Pennebaker, Coppersmith, De Choudhury). The thesis cites every list's provenance.
 - **`weak.py`** — tier-1: combines per-subreddit prior with lexicon overlap. Outputs *probabilistic* weak labels, not hard 0/1, so downstream training can use them as soft targets or with confidence weighting.
-- **`llm.py`** — tier-2: prompts Claude with the codebook from `docs/codebook.md`. Caches every response on disk. Stratified sampling across `subreddit_group` keeps the labelling cost predictable.
-- **`manual.py`** — tier-3: minimal Rich TUI for human annotation. Resumable; supports two-annotator setups; computes Cohen's κ.
-- **`aggregate.py`** — combines the tiers with precedence `manual > llm > weak`. Per-row `label_<k>_weight` is propagated to the loss for confidence-weighted training.
+- **`self_disclosure.py`** — self-disclosure labeling: regex diagnosis patterns ("I was diagnosed with X") filtered by negation, hypothetical, third-party, and denial detectors. Suicidality disclosure is disabled. Follows the CLEF eRisk protocol (Coppersmith et al. 2014; Losada & Crestani 2017). This is a high-confidence label source used as the clean test signal.
+- **`disclosure_dataset.py`** — builds the user-level self-disclosure test set: disclosed users as positives, subreddit-matched controls as negatives, `held_out_split` flag to keep train/test separation. `evaluate_user_level` aggregates per-post model scores to user-level metrics (AUROC, AUPRC, F1).
+- **`aggregate.py`** — combines tiers with precedence `disclosure > weak`. Disclosure positives override weak labels; disclosure negatives fall through (a regex non-match is not evidence of no anxiety). Per-row `label_<k>_weight` is propagated to the loss for confidence-weighted training.
 
 ### `src/features/`
 
@@ -138,7 +138,6 @@ Six concrete models, all subclassing `BaseModel`:
 | `XgboostLinguisticModel` | XGBoost | Trains on `f_*` features only |
 | `TransformerModel` | HuggingFace | Single binary head; tries MentalBERT first, falls back to RoBERTa |
 | `MultiTaskTransformer` | PyTorch | Shared encoder, sigmoid head per target, BCE-with-logits, per-task loss weights |
-| `LlmZeroShotModel` | Anthropic API | No training; runs prompts at predict time; cached |
 
 `splits.py` provides stratified train/val/test and `cross_subreddit_split` for the RQ3 transfer experiment.
 

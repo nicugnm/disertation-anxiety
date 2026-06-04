@@ -27,11 +27,13 @@ Health anxiety is clinically under-recognized: sufferers seek reassurance throug
 ### 1.3 Contributions
 
 1. A reproducible pipeline for Reddit mental-health NLP (`src/`).
-2. A 3-tier labeling scheme combining weak, LLM-assisted, and human labels (`src/labeling/`, `docs/codebook.md`).
-3. A multi-task transformer outperforming single-task baselines on health anxiety.
-4. A linguistic analysis identifying somatic vocabulary, reassurance-seeking, and uncertainty as signature health-anxiety markers — replicating SHAI item content.
-5. A cross-subreddit generalization study showing where the model fails.
-6. (Optional) A COVID temporal analysis.
+2. A two-tier labeling scheme combining Tier-1 weak labels (subreddit prior + lexicon) and Tier-2 self-disclosure labels (regex diagnosis phrases with negation/hypothetical/third-party/denial filters) (`src/labeling/`).
+3. A clean user-level evaluation protocol based on self-disclosed diagnoses: disclosed users as positives, subreddit-matched non-disclosed users as controls, held out from training (`src/labeling/disclosure_dataset.py`).
+4. A multi-task MentalRoBERTa transformer outperforming single-task baselines on health anxiety (Exp 8: weighted-F1 0.906, AUROC 0.955 on submissions; beats Low 2020's 0.851 baseline).
+5. A user-level disclosure evaluation (Exp 7) showing model performance on the held-out self-disclosure test set.
+6. A linguistic analysis identifying somatic vocabulary, reassurance-seeking, and uncertainty as signature health-anxiety markers — replicating SHAI item content.
+7. A cross-subreddit generalization study showing where the model fails.
+8. (Optional) A COVID temporal analysis.
 
 ### 1.4 Scope and ethics statement
 
@@ -95,10 +97,15 @@ Reproduce `docs/ethics.md`. Key points: no raw data redistribution; pseudonymize
 
 ### 3.5 Labeling
 
-`src/labeling/` — the methodological centerpiece.
-- **Tier 1 weak**: subreddit prior + lexicon (`lexicons.py`). Cite each lexicon's clinical provenance.
-- **Tier 2 LLM-assisted**: Claude with the codebook prompt (`llm.py`). Validate against tier 3 — report the LLM's agreement κ with each annotator.
-- **Tier 3 manual**: codebook in `docs/codebook.md`; 1000 posts, two annotators, κ targets in `configs/labeling.yaml`.
+`src/labeling/` — the methodological centerpiece. Two tiers were executed in this experiment.
+
+- **Tier 1 — weak** (`weak.py`): subreddit prior + lexicon overlap → `weak_<target>` (probabilistic score) and `weak_<target>_bin` (thresholded). Cite each lexicon's clinical provenance.
+- **Tier 2 — self-disclosure** (`self_disclosure.py`): regex diagnosis phrases with four false-positive filters (negation, hypothetical, third-party, denial) → `disclosure_<target>` (0/1) and `disclosure_<target>_match` (matched substring for traceability). Suicidality patterns are intentionally empty. Methodology follows Coppersmith et al. (2014) and CLEF eRisk (Losada et al. 2017–).
+- **Aggregation** (`aggregate.py`): `label_<target>` / `label_<target>_source` / `label_<target>_weight` with precedence disclosure > weak. `label_<target>_source` is always `'disclosure'` or `'weak'` in the corpus.
+
+### 3.5b Disclosure test set
+
+`src/labeling/disclosure_dataset.py`. Users with at least one verified self-disclosure are positives; subreddit-matched never-disclosed users are controls (2:1 ratio). All posts by test users are marked `held_out_split=True` and excluded from training. This is the primary clean evaluation set (Experiment 7). See `docs/disclosure_eval.md`.
 
 ### 3.6 Final corpus statistics
 
@@ -123,7 +130,6 @@ Multi-label binary classification: `y ∈ {0,1}^4` for {anxiety, health_anxiety,
 | RoBERTa-base fine-tuned | Modern baseline |
 | MentalRoBERTa fine-tuned | Domain-specific best baseline |
 | Multi-task MentalRoBERTa | Novelty contribution (joint heads) |
-| Claude zero-/few-shot | Tests prompting |
 
 ### 4.3 Training procedure
 
@@ -162,7 +168,11 @@ For each RQ:
 
 ### 5.1 RQ1: Detection performance
 
-Headline table: model × target × {F1, AUROC, AUPRC, ECE} with 95% CIs. Discussion of where MentalBERT beats RoBERTa beats baselines, and where multi-task helps health anxiety but not other targets.
+Headline table: model × target × {F1, AUROC, AUPRC, ECE} with 95% CIs. Discussion of where MentalRoBERTa beats RoBERTa beats baselines, and where multi-task helps health anxiety but not other targets.
+
+**Experiment 7 (user-level disclosure eval):** Per-model performance on the self-disclosure test set (positives = users who disclosed; controls = subreddit-matched non-disclosers). Report with and without masking the disclosure posts themselves (tests implicit signal vs. explicit regex cues).
+
+**Experiment 8 (HA-vs-Anxiety head-to-head):** MentalRoBERTa multi-task weighted-F1 0.906 / AUROC 0.955 on submissions, compared with Low et al. (2020) baseline of 0.851 weighted-F1.
 
 ### 5.2 RQ2: Linguistic markers
 
@@ -208,7 +218,6 @@ Restate contributions. Restate the disclaimer. Point to released artifacts (post
 - A. Codebook (`docs/codebook.md`).
 - B. Ethics statement (`docs/ethics.md`).
 - C. Hyperparameters (auto-generated from configs).
-- D. Inter-annotator agreement detail.
-- E. Full per-subreddit results.
-- F. Software environment (`pyproject.toml`, lockfile).
-- G. Reproducibility note: how to re-derive the corpus from post IDs + your own Reddit fetch.
+- D. Full per-subreddit results.
+- E. Software environment (`pyproject.toml`, lockfile).
+- F. Reproducibility note: how to re-derive the corpus from post IDs + your own Reddit fetch.

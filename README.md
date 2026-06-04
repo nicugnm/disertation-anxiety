@@ -26,7 +26,7 @@ A dissertation-grade NLP pipeline for detecting anxiety — with particular emph
 
 ## What this repo does (concretely)
 
-> **A dissertation-grade pipeline that takes ~16k Reddit posts from 10 mental-health-adjacent subreddits, applies a 3-tier labeling scheme grounded in clinical instruments (GAD-7, SHAI, PHQ-9, C-SSRS), trains 5 different model families to predict 4 binary labels {anxiety, health_anxiety, depression, suicidality}, evaluates them with 6 metrics + bootstrap CIs + per-subreddit and per-length subgroups, and produces 10 publication-quality figures plus a linguistic-marker analysis with FDR-corrected significance tests.**
+> **A dissertation-grade pipeline that takes Reddit posts from mental-health-adjacent subreddits, applies a two-source labeling scheme — tier-1 weak labels (subreddit prior + clinical-instrument lexicons: GAD-7, SHAI, PHQ-9, C-SSRS) and verified self-disclosure labels — trains multiple model families to predict 4 binary labels {anxiety, health_anxiety, depression, suicidality}, evaluates them with bootstrap CIs + per-subreddit / per-length subgroups + a user-level self-disclosure test set, and produces publication-quality figures plus a linguistic-marker analysis with FDR-corrected significance tests.**
 
 The thesis novelty: separating **health anxiety** from general anxiety as its own class, using a multi-task transformer with per-task loss weighting and tier-confidence-weighted training.
 
@@ -36,10 +36,13 @@ The thesis novelty: separating **health anxiety** from general anxiety as its ow
 
 Concrete deliverables, all working on real Reddit data as of the last commit:
 
+> **Corpus-scale note:** the corpus has grown to **743,881 posts / 38 subreddits** (≈93% comments). The per-target **Experiment 1–6** numbers below are from an earlier **16,382-post / 10-subreddit** run (`experiments/experiments_summary.json`) and are pending regeneration on the full corpus. **Experiments 7 & 8 use the current corpus.** Labels come from **two sources: tier-1 weak + self-disclosure.**
+
 ### ✅ Already running on real data
 - **Collection**: 16,382 posts (post-preprocessing) from 10 subreddits via the no-credentials JSON scraper (no Reddit API key needed). Deduplicated across 6 listings (top×{all,year,month,week} + new + hot).
 - **Preprocessing**: PII redaction (regex + spaCy NER), exact + near-dedup (SimHash), language filter, length filter → 16,382 cleaned posts.
-- **Tier-1 weak labeling**: 3,560 anxiety / 1,557 depression / 116 suicidality / 24 health-anxiety positives — health-anxiety scarcity motivates tier-2 LLM labeling.
+- **Tier-1 weak labeling**: 3,560 anxiety / 1,557 depression / 116 suicidality / 24 health-anxiety positives (earlier 16k run) — health-anxiety scarcity motivates the self-disclosure labels and the dedicated r/HealthAnxiety-vs-r/Anxiety head-to-head (Experiment 8).
+- **Self-disclosure labeling**: regex diagnosis detection ("I was diagnosed with X" / "I have GAD") with negation / hypothetical / third-party / denial filters — the high-confidence proxy that drives the held-out **user-level disclosure test set** (Experiment 7). Suicidality disclosure is disabled by design.
 - **8 binary classifiers trained** — TF-IDF + LogReg AND XGBoost-on-linguistic-features × 4 targets. Headline (XGBoost-linguistic): anxiety F1 **0.86** / depression F1 **0.74** / suicidality F1 **0.79** / health-anxiety F1 **1.00** *(circular: lexicon-derived label, lexicon-derived features — see caveats)*.
 - **MentalRoBERTa fine-tuned (single-target, anxiety)**: F1 **0.891** [0.87, 0.91] / AUROC **0.985** [0.98, 0.99] / ECE **0.032** — new SOTA on this corpus for anxiety, with bootstrap CIs.
 - **MentalRoBERTa multi-task (joint heads, dissertation novelty)**: trained on all 4 targets simultaneously with shared encoder + per-task loss weights + per-row confidence weights. anxiety F1 **0.894** / depression F1 **0.720** / suicidality F1 **0.647** / health-anxiety F1 **0.333** — the transformer *cannot* read the lexicons directly, so its rare-class numbers are the **honest** ones (XGBoost's were inflated by lexicon-feature → lexicon-label circularity).
@@ -52,16 +55,13 @@ Concrete deliverables, all working on real Reddit data as of the last commit:
 
 → **Full numbers, plots, and findings in [`docs/experiments.md`](docs/experiments.md)**.
 
-### ✅ Built and ready to run (needs API key / human time)
-- **Tier-2 LLM labeling**: ready to run with `ANTHROPIC_API_KEY` set. SQLite-cached so re-runs are free. **Next high-impact step** — fixes the health-anxiety label circularity that limits tier-1 results.
-- **Tier-3 manual annotation**: Rich-based TUI ready, resumable, two-annotator κ workflow.
-- **Claude zero-/few-shot baseline**: tests whether prompting beats fine-tuning.
-- **SHAP explainability** on the XGBoost-linguistic model — interpretability hook for the thesis discussion chapter.
+### ✅ Explainability
+- **SHAP explainability** on the XGBoost-linguistic model (`src/analysis/explainability.py`) — interpretability hook for the thesis discussion chapter.
 
 ### ✅ Reproducibility & ethics infrastructure
 - All YAML-driven (subreddits, labeling, models) — change behavior without editing code.
-- All RNG seeded; LLM/HTTP responses cached on disk.
-- Strict no-raw-text-redistribution policy. Pipeline-enforced PII redaction. Crisis-resource boilerplate. Two-annotator κ workflow.
+- All RNG seeded; scraper HTTP responses cached on disk.
+- Strict no-raw-text-redistribution policy. Pipeline-enforced PII redaction. Crisis-resource boilerplate.
 
 ---
 
@@ -109,14 +109,12 @@ Plus theoretical grounding from:
 | RoBERTa-base fine-tuned | `roberta-base` (Liu et al., 2019) | Modern baseline |
 | MentalRoBERTa fine-tuned | `mental/mental-roberta-base` (Ji et al., 2022) | Domain-specific best |
 | **Multi-task MentalRoBERTa** | shared encoder + 4 sigmoid heads | **Dissertation novelty** |
-| Claude zero-/few-shot | `claude-sonnet-4-6` API | Tests prompting vs fine-tuning |
-
 ### Software stack
 Python 3.11 · pandas · polars · pyarrow · scikit-learn · XGBoost · PyTorch · HuggingFace Transformers / Datasets / Accelerate · SHAP · spaCy · NLTK · VADER · ftfy · langdetect · zstandard · Anthropic SDK · structlog · Pydantic · Typer · Rich · matplotlib · seaborn · MLflow · pytest
 
 ### What we are *doing*
 1. Predicting **{anxiety, health_anxiety, depression, suicidality}** for each Reddit post.
-2. Using a **3-tier labeling pipeline** that combines algorithmic, LLM, and human annotation, validated against each other via Cohen's κ.
+2. Using a **two-source labeling scheme** — tier-1 weak (subreddit prior + clinical-instrument lexicons) + verified self-disclosure — with a held-out, user-disjoint self-disclosure test set for honest evaluation.
 3. Training **5 model families** behind a common `BaseModel` interface, with per-row confidence weights flowing into the loss.
 4. **Quantifying uncertainty** with bootstrap 95% CIs on every metric.
 5. **Detecting overfitting** via per-subreddit subgroup analysis and a cross-subreddit transfer experiment (RQ3).
@@ -188,7 +186,7 @@ Both COVID subreddits score ~2× r/Anxiety, validating their inclusion as the `h
 
 ### Experiment 6 — Modern baselines (MentalRoBERTa single-target + multi-task)
 
-Fine-tuned `mental/mental-roberta-base` on the same tier-1-labeled corpus, 4 epochs, lr=2e-5, max_length=256, on an RTX 4090. Single-target run trained one binary head for anxiety; multi-task run trained a shared encoder + 4 sigmoid heads simultaneously with per-task loss weights `{anxiety: 1.0, health_anxiety: 1.5, depression: 1.0, suicidality: 1.2}` and per-row confidence weights from the labeling tier (manual=1.0, llm=0.7, weak=0.4).
+Fine-tuned `mental/mental-roberta-base` on the same tier-1-labeled corpus, 4 epochs, lr=2e-5, max_length=256, on an RTX 4090. Single-target run trained one binary head for anxiety; multi-task run trained a shared encoder + 4 sigmoid heads simultaneously with per-task loss weights `{anxiety: 1.0, health_anxiety: 1.5, depression: 1.0, suicidality: 1.2}` and per-row confidence weights from the labeling source (disclosure=0.85, weak=0.4).
 
 **RQ1 headline table — F1 [bootstrap 95% CI] across all four model families × four targets:**
 
@@ -205,7 +203,7 @@ Fine-tuned `mental/mental-roberta-base` on the same tier-1-labeled corpus, 4 epo
 
 1. **Multi-task does not degrade the well-represented class.** Anxiety F1 0.894 (multi) vs 0.891 (single) — within CI overlap, and arguably a tiny gain. This is the standard prerequisite test for shared encoders, and it passes.
 2. **Calibration is excellent across the board** — ECE 0.001–0.039 for the transformer; no temperature scaling needed.
-3. **Health-anxiety F1 = 0.333 with CI [0.000, 0.818]** is the empirical case for tier-2 LLM labeling: only 24 weak-label positives is below the data efficiency frontier for transformer fine-tuning. The next big win comes from labels, not architecture.
+3. **Health-anxiety F1 = 0.333 with CI [0.000, 0.818]** reflects how few weak-label health-anxiety positives existed in the earlier 16k corpus (24) — below the data-efficiency frontier for transformer fine-tuning. The dedicated r/HealthAnxiety-vs-r/Anxiety head-to-head (Experiment 8) tackles this directly. The next big win comes from labels/data, not architecture.
 4. **Bootstrap CIs are wide for rare classes** (suicidality CI width = 0.39, health-anxiety = 0.82), and that's how it should be: point estimates on 3–20 positives are not science.
 
 ---
@@ -288,7 +286,7 @@ All figures generated from the real collected data. Corpus-level figures via `an
 ![Temporal](docs/figures/temporal.png)
 
 ### Weak-label positive rates per subreddit × label
-**Note `health_anxiety` is sparse everywhere** — that's the empirical motivation for tier-2 LLM labeling.
+**Note `health_anxiety` is sparse everywhere** — that's the empirical motivation for the self-disclosure labels and the dedicated r/HealthAnxiety-vs-r/Anxiety head-to-head (Experiment 8).
 ![Label distribution](docs/figures/label_distribution.png)
 
 ### Label co-occurrence
@@ -365,28 +363,19 @@ Same finding as Exp 2 (precision collapses on subreddits with few positives) now
 
 ## How labels are decided
 
-A 3-tier system. Final label = `manual > llm > weak` precedence. Each tier carries a confidence weight that flows into training as a sample weight.
+Two label sources are produced and used. `aggregate.py` merges them into `label_<target>` (with `_source` + `_weight`): **`label_<target>_source` is always `disclosure` or `weak`** (`disclosure=1` overrides weak; `disclosure=0` falls through to weak). Each source carries a confidence weight that flows into training as a sample weight (disclosure = 0.85, weak = 0.4).
 
-### Tier 1 — weak (algorithmic, cheap, noisy)
+### Source 1 — weak labels (algorithmic, cheap, noisy)
 ```
 weak_score(label) = 0.5 · subreddit_prior(label) + 0.5 · lexicon_score(label, post)
 positive iff weak_score ≥ threshold[label]
 ```
 Lexicons are derived from clinical instruments (GAD-7, SHAI, HAI, PHQ-9, C-SSRS). Subreddit priors are expert-set in `configs/subreddits.yaml`. Thresholds are in `configs/labeling.yaml`.
 
-### Tier 2 — LLM (Claude with codebook prompt, mid-cost)
-`claude-sonnet-4-6` reads the codebook + the post and returns binary labels + 1–5 confidence + ≤30-word rationale. **Validated against tier 3** via Cohen's κ. Cached on disk.
+### Source 2 — self-disclosure (high-confidence proxy)
+Regex diagnosis patterns ("I was diagnosed with X", "I have GAD", "I'm a hypochondriac") are matched, then **rejected** if a negation / hypothetical / third-party / denial cue appears within ±50 chars → `disclosure_<target>` + the matched span. Suicidality disclosure is **disabled** by design. This is the Coppersmith/eRisk-style proxy and the basis for the held-out **user-level disclosure test set** (`build-disclosure-testset` → `eval-disclosure`). Disclosure is asymmetric: `disclosure=1` overrides the weak label; `disclosure=0` falls through to weak (a non-match is not evidence of "negative").
 
-### Tier 3 — manual (gold standard, ~1000 posts)
-Two annotators follow `docs/codebook.md`. κ targets:
-| label | min κ |
-|---|---:|
-| anxiety | 0.70 |
-| **health_anxiety** | **0.60** *(harder)* |
-| depression | 0.65 |
-| suicidality | 0.75 |
-
-**Full details + the codebook decision rules: [`docs/labeling.md`](docs/labeling.md) and [`docs/codebook.md`](docs/codebook.md)**.
+**Full details + the codebook label definitions: [`docs/labeling.md`](docs/labeling.md) and [`docs/codebook.md`](docs/codebook.md)**.
 
 ---
 
@@ -429,12 +418,12 @@ Two annotators follow `docs/codebook.md`. κ targets:
                    └──────┬───────┘
                           ▼
 ┌─────────┐   ┌─────────────┐   ┌─────────────┐   ┌──────────┐   ┌──────────┐
-│ collect ├──▶│ preprocess  ├──▶│ label (1-3) ├──▶│ features ├──▶│  train   │
+│ collect ├──▶│ preprocess  ├──▶│ label       ├──▶│ features ├──▶│  train   │
 │         │   │ clean       │   │ weak +      │   │          │   │ tfidf    │
-│ scraper │   │ anonymize   │   │ llm +       │   │ LIWC-    │   │ xgboost  │
-│ praw    │   │ dedupe      │   │ manual      │   │ like     │   │ roberta  │
-│ dump    │   │             │   │ aggregate   │   │          │   │ multitask│
-│ synth   │   │             │   │             │   │          │   │ llm-zs   │
+│ scraper │   │ anonymize   │   │ disclosure  │   │ LIWC-    │   │ xgboost  │
+│ praw    │   │ dedupe      │   │ aggregate   │   │ like     │   │ roberta  │
+│ dump    │   │             │   │             │   │          │   │ multitask│
+│ synth   │   │             │   │             │   │          │   │          │
 └─────────┘   └─────────────┘   └─────────────┘   └──────────┘   └────┬─────┘
                                                                        │
                                 ┌──────────────────────────────────────┤
@@ -456,7 +445,7 @@ Every stage has an independent CLI entry point (`anxiety <stage>`) and a stable 
 ### 1. Install (once)
 ```bash
 make install-dev          # pip install -e ".[dev]" + spaCy model + NLTK data
-cp .env.example .env      # optional: needed for PRAW or LLM labeling
+cp .env.example .env      # optional: only needed for the PRAW (authenticated Reddit) backend
 ```
 
 ### 2. End-to-end on synthetic data (no creds, ~30 sec)
@@ -469,7 +458,9 @@ make smoke
 anxiety collect --backend scraper            # ~15 min for ~14k posts
 anxiety preprocess                            # ~2 min
 anxiety label --tier weak                     # <30 sec
-anxiety label --tier aggregate                # combine tiers
+anxiety label --tier disclosure               # self-disclosure regex labels + audit
+anxiety label --tier aggregate                # combine sources (disclosure + weak)
+anxiety build-disclosure-testset              # held-out user-level disclosure test set
 anxiety train configs/models/baseline.yaml    # ~30 sec for TF-IDF
 anxiety evaluate experiments/runs/tfidf_logreg
 anxiety plot --run-dir experiments/runs/tfidf_logreg
@@ -478,12 +469,6 @@ anxiety analyze-markers --target anxiety
 
 ### 4. Optional upgrades
 ```bash
-# Tier-2 LLM labeling (needs ANTHROPIC_API_KEY)
-anxiety label --tier llm
-
-# Tier-3 manual annotation (TUI)
-anxiety annotate --annotator-id you
-
 # Train MentalRoBERTa (GPU/MPS strongly recommended; auto-detected)
 anxiety train configs/models/transformer.yaml
 
@@ -506,7 +491,7 @@ print(df.dtypes)
 # clean_text            object   — anonymized + cleaned text
 # author_hash           object   — salted hash of original author
 # label_anxiety        float64   — final aggregated label (0/1)
-# label_anxiety_source  object   — 'manual' | 'llm' | 'weak'
+# label_anxiety_source  object   — 'disclosure' | 'weak'
 # label_anxiety_weight float64   — confidence weight for training loss
 # weak_anxiety         float64   — raw tier-1 score
 # ...
@@ -550,22 +535,6 @@ ax.set_title("Anxiety positive rate over time, by subreddit")
 fig.savefig("docs/figures/custom__anxiety_over_time.png", bbox_inches="tight")
 ```
 
-### Compute Cohen's κ between two annotators
-```python
-from src.labeling.manual import cohen_kappa
-ann = pd.read_parquet("data/processed/gold_test_set.parquet")
-print(cohen_kappa(ann, "health_anxiety", "alice", "bob"))
-```
-
-### Re-label a subset with Claude (tier-2)
-```python
-from src.labeling.llm import label_corpus
-from src.utils.config import load_labeling, load_subreddits
-
-df  = pd.read_parquet("data/processed/labeled.parquet").sample(50)
-out = label_corpus(df, load_subreddits(), load_labeling())
-print(out[["id", "llm_health_anxiety", "llm_health_anxiety_conf", "llm_rationale"]])
-```
 
 ---
 
@@ -574,9 +543,9 @@ print(out[["id", "llm_health_anxiety", "llm_health_anxiety_conf", "llm_rationale
 ```
 configs/                        YAML configuration (subreddits, labeling, models)
 src/
-├── collection/                 4 backends (scraper, praw, dump, synthetic)
+├── collection/                 backends: scraper, search, praw, dump, synthetic, author-history (+ eRisk loader)
 ├── preprocessing/              clean, anonymize, dedupe
-├── labeling/                   3-tier labeling: weak / llm / manual / aggregate
+├── labeling/                   weak + self_disclosure + disclosure_dataset + aggregate
 ├── features/linguistic.py      LIWC-like + somatic + pronouns + sentiment
 ├── models/                     5 model families behind BaseModel interface
 ├── evaluation/                 metrics, CIs, calibration, error analysis
@@ -601,7 +570,7 @@ tests/                          22 tests
 | [`docs/index.md`](docs/index.md) | Reading order |
 | [`docs/experiments.md`](docs/experiments.md) | **What we achieved**: 5 classification studies on real data with numbers + findings + caveats |
 | [`docs/architecture.md`](docs/architecture.md) | Module-by-module design, dataflow, extension points |
-| [`docs/labeling.md`](docs/labeling.md) | The 3-tier labeling system in depth |
+| [`docs/labeling.md`](docs/labeling.md) | The weak + self-disclosure labeling scheme in depth |
 | [`docs/validation.md`](docs/validation.md) | Overfitting prevention, data correctness, prediction validation |
 | [`docs/models.md`](docs/models.md) | Per-model docs + tuning hooks |
 | [`docs/data_dictionary.md`](docs/data_dictionary.md) | Every column at every pipeline stage |
@@ -610,7 +579,7 @@ tests/                          22 tests
 | [`docs/reproducibility.md`](docs/reproducibility.md) | Exact reproduction recipe |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | Common errors + fixes |
 | [`docs/ethics.md`](docs/ethics.md) | IRB-grade ethics statement |
-| [`docs/codebook.md`](docs/codebook.md) | 4-label annotation rules + κ targets |
+| [`docs/codebook.md`](docs/codebook.md) | 4-label definitions (reference) |
 | [`docs/thesis_outline.md`](docs/thesis_outline.md) | Chapter-by-chapter dissertation map |
 
 ---

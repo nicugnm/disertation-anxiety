@@ -1,6 +1,6 @@
 # Models
 
-Six concrete models, all subclassing `BaseModel`. Each implements `fit`, `predict_proba`, `save`, `load`. Add a new model by subclassing + registering in `src/models/registry.py`.
+Four concrete models, all subclassing `BaseModel`. Each implements `fit`, `predict_proba`, `save`, `load`. Add a new model by subclassing + registering in `src/models/registry.py`.
 
 ## At a glance
 
@@ -10,7 +10,6 @@ Six concrete models, all subclassing `BaseModel`. Each implements `fit`, `predic
 | `XgboostLinguisticModel` | `xgboost.yaml` | XGBoost | Trains on `f_*` features; SHAP-explainable |
 | `TransformerModel` | `transformer.yaml` | HuggingFace | Single-target fine-tune |
 | `MultiTaskTransformer` | `multitask.yaml` | PyTorch | **Dissertation novelty** — joint heads |
-| `LlmZeroShotModel` | `llm_zero_shot.yaml` | Anthropic | Prompts at predict time; no fitting |
 
 ## TF-IDF + Logistic Regression
 
@@ -106,21 +105,9 @@ loss_weights:
   suicidality: 1.2
 ```
 
-Per-row, per-task confidence weights (from the labeling tier — manual=1.0, llm=0.7, weak=0.4) are multiplied in too, so noisy weak labels can't drown out the smaller, cleaner LLM/manual signal.
+Per-row, per-task confidence weights (from the labeling tier — `disclosure=0.85` for positive disclosures, `weak=0.4`) are multiplied in too, so noisy weak labels are down-weighted relative to self-disclosure positives.
 
 The training loop is hand-rolled in pure PyTorch (rather than using `Trainer`) because we need the per-(sample, task) sample weighting that HF Trainer doesn't natively support.
-
-## Claude zero-/few-shot
-
-`src/models/llm_zero_shot.py`. Sends each post to the Claude API with a prompt asking for a yes/no answer on the target label. No fine-tuning.
-
-**Few-shot mode.** Set `n_few_shot: N` and provide `data/processed/few_shot_examples.jsonl` with N labelled examples. The prompt prepends them as in-context demonstrations.
-
-**Cache.** Same SQLite cache pattern as tier-2 labelling. Re-evaluation against the same test set is free.
-
-**Cost control.** `rpm` rate-limits requests; cache hits don't sleep.
-
-**When to use it.** As a baseline for "do we even need fine-tuning?" If Claude zero-shot beats the fine-tuned MentalRoBERTa on health anxiety, that's a finding for the discussion chapter.
 
 ## Saving and loading
 
@@ -129,7 +116,6 @@ All models implement the same `save(path)` / `load(path)` interface, but the on-
 - TF-IDF / XGBoost: pickle.
 - Transformer: HuggingFace `save_pretrained` / `from_pretrained` on a directory.
 - Multi-task: `state_dict()` + `tokenizer` + `targets.txt` in a directory.
-- LLM zero-shot: just a sentinel file (model lives at the API).
 
 `anxiety train` saves to `experiments/runs/<name>/model/`. `anxiety evaluate` expects that path layout.
 
