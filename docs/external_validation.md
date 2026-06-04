@@ -1,24 +1,35 @@
 # External (cross-corpus) validation
 
-TF-IDF anxiety model trained on OUR corpus, applied ZERO-SHOT to independent corpora. RMHD = anxiety-related subreddits (anxiety, healthanxiety, socialanxiety) vs controls (fitness, parenting, meditation, conspiracy); subreddit-as-label. ANGST = 3-expert-psychologist labels (gated; run when available).
+Our anxiety models applied ZERO-SHOT to independent corpora: **RMHD** (Low 2020, subreddit labels) and **ANGST** (Hengle 2024, 3 expert-psychologist labels). TF-IDF trained on our corpus; transformer = saved MentalRoBERTa multi-task checkpoint. `src/evaluation/external.py`, `scripts/external_validation.py`.
 
 _Regenerate: `python scripts/external_validation.py`_
 
-| dataset | n | n_pos | auroc | auprc | f1@0.5 |
-|---|---|---|---|---|---|
-| RMHD (Low 2020) | 20733 | 8619 | 0.9195 | 0.9086 | 0.8194 |
-| ANGST (Hengle 2024, experts) | 2872 | 701 | 0.8215 | 0.5185 | 0.6039 |
+| model | dataset | n | n_pos | auroc | auprc | f1@0.5 |
+|---|---|---|---|---|---|---|
+| TF-IDF | RMHD (Low 2020) | 20733 | 8619 | 0.9195 | 0.9086 | 0.8194 |
+| TF-IDF | ANGST (experts) | 2872 | 701 | 0.8215 | 0.5185 | 0.6039 |
+| MentalRoBERTa-MT | RMHD (Low 2020) | 20733 | 8619 | 0.8785 | 0.8794 | 0.7751 |
+| MentalRoBERTa-MT | ANGST (experts) | 2872 | 701 | 0.7885 | 0.4587 | 0.4227 |
 
-## RMHD per-subreddit (mean predicted anxiety score)
+![external AUROC](figures/external_validation.png)
 
-| dataset | subreddit | label | n | mean_anxiety_score | pred_pos_rate@0.5 |
-|---|---|---|---|---|---|
-| RMHD | anxiety | 1 | 4999 | 0.7978 | 0.8298 |
-| RMHD | healthanxiety | 1 | 795 | 0.7085 | 0.7157 |
-| RMHD | socialanxiety | 1 | 2825 | 0.6011 | 0.6039 |
-| RMHD | fitness | 0 | 3488 | 0.1449 | 0.0175 |
-| RMHD | parenting | 0 | 3080 | 0.1236 | 0.0393 |
-| RMHD | meditation | 0 | 2204 | 0.3112 | 0.1987 |
-| RMHD | conspiracy | 0 | 3342 | 0.0857 | 0.0048 |
+## RMHD per-subreddit mean predicted P(anxiety)
 
-![external](figures/external_validation.png)
+| model | subreddit | label | mean_anxiety_score |
+|---|---|---|---|
+| TF-IDF | anxiety | 1 | 0.7978 |
+| TF-IDF | healthanxiety | 1 | 0.7085 |
+| TF-IDF | socialanxiety | 1 | 0.6011 |
+| TF-IDF | fitness | 0 | 0.1449 |
+| TF-IDF | parenting | 0 | 0.1236 |
+| TF-IDF | meditation | 0 | 0.3112 |
+| TF-IDF | conspiracy | 0 | 0.0857 |
+| MentalRoBERTa-MT | anxiety | 1 | 0.7248 |
+| MentalRoBERTa-MT | healthanxiety | 1 | 0.6197 |
+| MentalRoBERTa-MT | socialanxiety | 1 | 0.5325 |
+| MentalRoBERTa-MT | fitness | 0 | 0.0175 |
+| MentalRoBERTa-MT | parenting | 0 | 0.0495 |
+| MentalRoBERTa-MT | meditation | 0 | 0.1089 |
+| MentalRoBERTa-MT | conspiracy | 0 | 0.0064 |
+
+![RMHD per-subreddit](figures/external_validation_rmhd.png)

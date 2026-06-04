@@ -393,14 +393,18 @@ Protected demographics are unavailable (anonymized corpus) and inferring them wi
 
 Internal splits only prove internal validity (cf. Ernala et al. 2019). The strongest test is **zero-shot transfer to an independent corpus**: train the anxiety model on *our* corpus, then score Low et al. (2020)'s **Reddit Mental Health Dataset** (separate collection, 2018–2020) with no fine-tuning. `src/evaluation/external.py`, `scripts/external_validation.py`.
 
-| external dataset | n | AUROC | AUPRC | F1@0.5 |
-|---|---:|---:|---:|---:|
-| **RMHD (Low 2020)** — anxiety subs vs controls (subreddit labels) | 20,733 | **0.920** | 0.909 | 0.819 |
-| **ANGST (Hengle 2024)** — anxiety vs not (**3 expert psychologists**) | 2,872 | **0.822** | 0.519 | 0.604 |
+Two independent corpora, two models compared **zero-shot** — RMHD (Low 2020, subreddit labels) and ANGST (Hengle 2024, **3 expert psychologists**). `src/evaluation/external.py`, `scripts/external_validation.py`.
 
-![RMHD transfer](docs/figures/external_validation.png)
+| model | RMHD AUROC | ANGST AUROC (experts) | ANGST AUPRC |
+|---|---:|---:|---:|
+| **TF-IDF + LogReg** | **0.920** | **0.822** | 0.519 |
+| MentalRoBERTa multi-task | 0.879 | 0.789 | 0.459 |
 
-**The model transfers across corpora *and* against clinical experts.** (1) On **RMHD**, mean predicted P(anxiety) per subreddit cleanly separates anxiety communities — anxiety **0.80**, healthanxiety **0.71**, socialanxiety **0.60** — from controls — conspiracy 0.09, parenting 0.12, fitness 0.14, meditation 0.31 (AUROC **0.92**). (2) On **ANGST** — the gold comparator with **expert-psychologist** labels — the same model (trained only on our weak/disclosure labels) reaches **AUROC 0.82 zero-shot**: a "Reddit classifier" validated against clinical ground truth. ANGST is harder than RMHD (0.82 vs 0.92, AUPRC 0.52) for a principled reason — its negatives include **depression** posts, so the model must separate anxiety from depression (overlapping distress language), not merely from neutral text. Together these establish genuine **external validity** — the learned signal is not an artifact of our collection. Full tables in [docs/external_validation.md](docs/external_validation.md).
+![external validation](docs/figures/external_validation.png)
+
+**Both models generalize across corpora — and validate against clinical experts.** Even on ANGST's gold expert labels the model reaches **AUROC 0.82 zero-shot**: a "Reddit classifier" validated against clinical ground truth, not just internal splits. ANGST is harder than RMHD (0.82 vs 0.92) for a principled reason — its negatives include **depression** posts, so anxiety must be separated from depression (overlapping distress language), not merely from neutral text. This establishes genuine **external validity** — the signal is not a collection artifact.
+
+Surprisingly, the **lexical TF-IDF out-transfers the transformer on both sets** — echoing the significance/robustness findings that stable anxiety vocabulary travels across corpora better than the transformer's learned representation. ⚠️ **Fair-comparison caveat:** the saved transformer was trained on the narrower DANN-transfer split (~60k, panic/baseline subs excluded) while this TF-IDF used a 200k full-corpus sample, so the comparison favors TF-IDF on training breadth; a strict like-for-like result needs the transformer retrained on the full corpus. Full tables in [docs/external_validation.md](docs/external_validation.md).
 
 ---
 
