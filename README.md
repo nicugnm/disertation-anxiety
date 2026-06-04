@@ -319,6 +319,20 @@ Every A-beats-B claim deserves a p-value. McNemar's test (on each model's decisi
 
 ---
 
+### SHAP — what the linguistic model actually uses
+
+Exact TreeSHAP (XGBoost native `pred_contribs`) on the 26 hand-crafted features, per target, author-disjoint split. `src/evaluation/shap_utils.py`, `scripts/shap_linguistic.py`.
+
+![SHAP health anxiety](docs/figures/shap_health_anxiety_beeswarm.png)
+
+**A two-sided interpretability story:**
+1. **Each target is dominated (~10×) by its own clinical lexicon** — anxiety→`f_anx_term_rate` (mean|SHAP| 6.74), depression→`f_dep_term_rate` (7.32), health_anxiety→`f_health_anx_term_rate` (5.79). Since the **weak labels are derived from these lexicons**, this *quantifies the circularity*: the model largely re-reads the labeling rule. SHAP makes the caveat concrete.
+2. **The secondary markers are genuine and non-circular** (not in the labeling lexicons): **`f_first_sing_rate` ↑ for all three targets** (first-person-singular self-focus — replicates Pennebaker & Rude independently), negative sentiment ↑, third-person ↓. health_anxiety additionally loads on general-anxiety terms (subtype overlap) and `f_body_part_rate` (somatic vigilance — the SHAI construct).
+
+Takeaway for the discussion chapter: the linguistic model's *primary* signal is circular, but its *secondary* signals are clinically validated markers. Per-target tables + beeswarm/bar plots in [docs/shap.md](docs/shap.md).
+
+---
+
 ## Visual gallery
 
 All figures generated from the real collected data. Corpus-level figures via `anxiety plot`; experiment figures via `python scripts/run_experiments.py`.
