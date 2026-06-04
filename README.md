@@ -413,6 +413,38 @@ Connects the model to the clinical instrument's structure (absent from prior wor
 
 ---
 
+### Stronger encoders
+
+Does scaling the encoder beat the domain-pretrained MentalRoBERTa on the r/HealthAnxiety-vs-r/Anxiety task (Exp 8 setup, submissions-only, author-disjoint)? `scripts/exp_stronger_models.py`.
+
+| model | weighted-F1 | AUROC | vs Low 2020 |
+|---|---:|---:|---:|
+| Low 2020 (SGD-L1) | 0.851 | — | baseline |
+| MentalRoBERTa (Exp 8) | 0.906 | 0.955 | +0.055 |
+| **RoBERTa-large** | **0.916** | **0.962** | **+0.065** |
+| DeBERTa-v3-base | — | — | NaN instability (failed) |
+
+![stronger models](docs/figures/stronger_models.png)
+
+**RoBERTa-large is numerically the best (weighted-F1 0.916, AUROC 0.962)** — but the +0.01 over MentalRoBERTa is small and almost certainly within the wide CI of a 636-post test set (cf. the significance result). So scaling the encoder gives at most a marginal gain here; MentalRoBERTa's domain pretraining already sits near the task ceiling. **DeBERTa-v3-base** loaded correctly (real `DebertaV2ForSequenceClassification`) but hit a NaN training instability under these hyper-parameters — a documented DeBERTa-v3 sensitivity, recorded honestly rather than worked around. Domain-adaptive MLM and Llama-3.1-8B QLoRA are documented as recipes (extra deps + multi-hour GPU) in [docs/stronger_models.md](docs/stronger_models.md).
+
+---
+
+### Weak-label filtering (confident learning)
+
+Are the noisy subreddit+lexicon weak labels hurting the model? Out-of-fold scores flag examples where the model confidently disagrees with the weak label (likely mislabels), which are removed before retraining; the cleaned model is tested on the held-out self-disclosure set (disclosure users excluded from training). `src/labeling/filtering.py`, `scripts/weak_label_filtering.py`.
+
+| setting | n_train | flagged removed | disclosure user-level AUROC |
+|---|---:|---:|---:|
+| original (all weak labels) | 80,000 | 0 | 0.7447 |
+| cleaned (confident issues removed) | 79,119 | 881 | 0.7445 |
+
+![weak-label filtering](docs/figures/weak_label_filtering.png)
+
+**A clean null: filtering doesn't help (0.7447 → 0.7445).** Even flagging 881 confident disagreements (754 likely false-negatives — genuine anxiety in non-anxiety subs; 127 likely false-positives — off-topic posts in anxiety subs) leaves disclosure detection unchanged. The weak labels are robust enough that the linear model's disclosure ceiling (~0.74) is *not* bottlenecked by removable label noise — a reassuring validation of the weak-supervision design. The flagged examples are still useful qualitatively (see [docs/weak_label_filtering.md](docs/weak_label_filtering.md) for examples of mislabels the model surfaces).
+
+---
+
 ## Visual gallery
 
 All figures generated from the real collected data. Corpus-level figures via `anxiety plot`; experiment figures via `python scripts/run_experiments.py`.

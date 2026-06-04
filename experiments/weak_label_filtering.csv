@@ -1,0 +1,3 @@
+setting,n_train,flagged_removed,disclosure_user_auroc
+original (all weak labels),80000,0,0.7447
+cleaned (confident issues removed),79119,881,0.7445

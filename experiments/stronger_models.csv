@@ -1,0 +1,6 @@
+model,pretrained,weighted_f1,auroc,note,f1
+Low 2020 (SGD-L1),-,0.851,,published baseline,
+TF-IDF + LogReg,-,0.886,0.944,Exp 8,
+MentalRoBERTa,mental/mental-roberta-base,0.906,0.955,Exp 8,
+roberta-large,roberta-large,0.9156,0.962,this run,0.8889
+deberta-v3-base,microsoft/deberta-v3-base,,,FAILED: Input contains NaN.,
