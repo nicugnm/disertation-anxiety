@@ -186,7 +186,7 @@ results_df = pd.DataFrame(results_rows)
 results_df.to_csv(OUT / "exp1_per_target.csv", index=False)
 plot_per_target_comparison(results_df, FIG / "exp1__per_target_f1.png", metric="f1")
 plot_per_target_comparison(results_df, FIG / "exp1__per_target_auroc.png", metric="auroc")
-console.print(f"  → {FIG / 'exp1__per_target_f1.png'}")
+console.print(f"  -> {FIG / 'exp1__per_target_f1.png'}")
 
 
 # --------------------------------------------------------------------------- #
@@ -238,7 +238,7 @@ transfer_df = pd.DataFrame(transfer_rows)
 transfer_df.to_csv(OUT / "exp2_transfer.csv", index=False)
 if not transfer_df.empty:
     plot_transfer_drop(transfer_df, FIG / "exp2__transfer.png", metric="f1")
-    console.print(f"  → {FIG / 'exp2__transfer.png'}")
+    console.print(f"  -> {FIG / 'exp2__transfer.png'}")
 
 
 # --------------------------------------------------------------------------- #
@@ -269,7 +269,7 @@ cm = pd.DataFrame(confusion_matrix(y_true, y_pred, labels=labels), index=labels,
 cm.to_csv(OUT / "exp3_subreddit_confusion.csv")
 plot_subreddit_confusion(cm, FIG / "exp3__subreddit_confusion.png",
                          title=f"Subreddit classification — macro-F1 = {sub_f1:.3f}")
-console.print(f"  → {FIG / 'exp3__subreddit_confusion.png'}")
+console.print(f"  -> {FIG / 'exp3__subreddit_confusion.png'}")
 
 
 # --------------------------------------------------------------------------- #
@@ -295,7 +295,7 @@ with make_progress() as bar:
 
 if markers_by_target:
     plot_marker_heatmap(markers_by_target, FIG / "exp4__marker_heatmap.png", top_n=8)
-    console.print(f"  → {FIG / 'exp4__marker_heatmap.png'}")
+    console.print(f"  -> {FIG / 'exp4__marker_heatmap.png'}")
 
 
 # --------------------------------------------------------------------------- #
@@ -349,5 +349,5 @@ summary = {
     },
 }
 (OUT / "experiments_summary.json").write_text(json.dumps(summary, indent=2, default=str))
-console.print(f"  Summary → {OUT / 'experiments_summary.json'}")
+console.print(f"  Summary -> {OUT / 'experiments_summary.json'}")
 console.print("\n[green]All experiments complete.[/green]")

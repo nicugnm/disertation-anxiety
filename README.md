@@ -36,22 +36,21 @@ The thesis novelty: separating **health anxiety** from general anxiety as its ow
 
 Concrete deliverables, all working on real Reddit data as of the last commit:
 
-> **Corpus-scale note:** the corpus has grown to **743,881 posts / 38 subreddits** (≈93% comments). The per-target **Experiment 1–6** numbers below are from an earlier **16,382-post / 10-subreddit** run (`experiments/experiments_summary.json`) and are pending regeneration on the full corpus. **Experiments 7 & 8 use the current corpus.** Labels come from **two sources: tier-1 weak + self-disclosure.**
+> **Corpus:** **743,879 posts / 38 subreddits** (≈93% comments). **All experiments (1–9) now run on this full corpus** (`experiments/experiments_summary.json`, regenerate with `python scripts/run_experiments.py`). Labels come from **two sources: tier-1 weak + self-disclosure.**
 
 ### ✅ Already running on real data
-- **Collection**: 16,382 posts (post-preprocessing) from 10 subreddits via the no-credentials JSON scraper (no Reddit API key needed). Deduplicated across 6 listings (top×{all,year,month,week} + new + hot).
-- **Preprocessing**: PII redaction (regex + spaCy NER), exact + near-dedup (SimHash), language filter, length filter → 16,382 cleaned posts.
-- **Tier-1 weak labeling**: 3,560 anxiety / 1,557 depression / 116 suicidality / 24 health-anxiety positives (earlier 16k run) — health-anxiety scarcity motivates the self-disclosure labels and the dedicated r/HealthAnxiety-vs-r/Anxiety head-to-head (Experiment 8).
+- **Collection**: 743,879 posts (post-preprocessing) from 38 subreddits via the no-credentials JSON scraper + by-author history expansion (no Reddit API key needed).
+- **Preprocessing**: PII redaction (regex + spaCy NER), exact + near-dedup (SimHash), language filter, length filter → 743,879 cleaned posts.
+- **Tier-1 weak labeling**: 69,010 anxiety / 10,659 depression / 2,544 health-anxiety / 458 suicidality positives — health-anxiety is now well-populated (vs 24 in the 16k snapshot), and the dedicated r/HealthAnxiety-vs-r/Anxiety head-to-head (Experiment 8) isolates it cleanly.
 - **Self-disclosure labeling**: regex diagnosis detection ("I was diagnosed with X" / "I have GAD") with negation / hypothetical / third-party / denial filters — the high-confidence proxy that drives the held-out **user-level disclosure test set** (Experiment 7). Suicidality disclosure is disabled by design.
-- **8 binary classifiers trained** — TF-IDF + LogReg AND XGBoost-on-linguistic-features × 4 targets. Headline (XGBoost-linguistic): anxiety F1 **0.86** / depression F1 **0.74** / suicidality F1 **0.79** / health-anxiety F1 **1.00** *(circular: lexicon-derived label, lexicon-derived features — see caveats)*.
-- **MentalRoBERTa fine-tuned (single-target, anxiety)**: F1 **0.891** [0.87, 0.91] / AUROC **0.985** [0.98, 0.99] / ECE **0.032** — new SOTA on this corpus for anxiety, with bootstrap CIs.
-- **MentalRoBERTa multi-task (joint heads, dissertation novelty)**: trained on all 4 targets simultaneously with shared encoder + per-task loss weights + per-row confidence weights. anxiety F1 **0.894** / depression F1 **0.720** / suicidality F1 **0.647** / health-anxiety F1 **0.333** — the transformer *cannot* read the lexicons directly, so its rare-class numbers are the **honest** ones (XGBoost's were inflated by lexicon-feature → lexicon-label circularity).
-- **Cross-subreddit transfer experiment (RQ3)**: in-distribution F1 = **0.889** vs cross-subreddit F1 = **0.331**, but AUROC stays at **0.967** — reveals that the *ranking* generalizes but the *threshold* doesn't.
-- **9-way subreddit classifier**: macro-F1 = **0.643** (vs random 0.10), confirming substantial linguistic distinctiveness.
-- **Per-target linguistic-marker analysis**: 4 separate Cohen's d analyses with Benjamini-Hochberg FDR correction. **22 features significant for anxiety, 19 for depression, 13 for suicidality, 5 for health-anxiety**. `f_third_rate` (third-person pronouns) consistently negative across all targets — replicates Pennebaker. `f_sent_neg` rises monotonically with target severity.
-- **Health-anxiety severity ranking**: r/COVID19_support (mean 0.239) and r/COVID19positive (0.232) both score ~2× r/Anxiety (0.122), validating their inclusion as health-anxiety-enriched subreddits.
-- **28 figures generated** from real data into `docs/figures/` — corpus-level + experiment plots + per-target PR/ROC, calibration, confusion, and per-subreddit F1 for each of the 4 targets from the multi-task transformer run.
-- **22/22 unit tests passing**.
+- **8 binary classifiers trained** — TF-IDF + LogReg AND XGBoost-on-linguistic-features × 4 targets. Headline (TF-IDF, which now leads at scale): anxiety F1 **0.85** / depression **0.62** / health-anxiety **0.50** / suicidality **0.41**. (XGBoost's rare-class F1 is circular — lexicon-derived label + features.)
+- **MentalRoBERTa multi-task (joint heads, dissertation novelty)**: full-corpus shared encoder + 4 sigmoid heads, held-out 30k test. anxiety F1 **0.862** / depression **0.686** / health-anxiety **0.573** / suicidality **0.500**, with **AUROC 0.98–0.99** on all four and **ECE ≤ 0.01** — the honest rare-class numbers (the transformer can't read the lexicons, unlike XGBoost).
+- **Cross-subreddit transfer experiment (RQ3)**: in-distribution F1 = **0.934** vs cross-subreddit F1 = **0.308**, but AUROC stays at **0.99** — the *ranking* generalizes, the *threshold* doesn't (fixed by per-subreddit calibration, macro-F1 0.719 → 0.781).
+- **38-way subreddit classifier**: macro-F1 = **0.407** (vs random 0.026, ~15×), confirming substantial linguistic distinctiveness across all communities.
+- **Per-target linguistic-marker analysis**: 4 Cohen's d analyses with Benjamini-Hochberg FDR correction. **26 significant for anxiety, 25 for depression, 24 for health-anxiety, 20 for suicidality**. First-person-singular up / third-person down across distress targets (Pennebaker/Rude); `f_sent_neg` rises with severity (anxiety +0.74 → suicidality +1.35).
+- **Health-anxiety severity ranking**: r/HealthAnxiety (mean 0.488) dominates, followed by the COVID/chronic-illness cluster (COVID19_support 0.231, ChronicIllness 0.211); neutral controls near zero — the score discriminates *health* anxiety specifically.
+- **Figures generated** into `docs/figures/` — corpus-level + experiment plots (`exp1–6`) plus the extension analyses (calibration, thresholds, SHAP, eRisk, fairness, external validation, …).
+- **140 unit tests passing**.
 
 → **Full numbers, plots, and findings in [`docs/experiments.md`](docs/experiments.md)**.
 
@@ -68,21 +67,18 @@ Concrete deliverables, all working on real Reddit data as of the last commit:
 ## What was used (models, data, instruments)
 
 ### Data sources
-| Subreddit | Role | Posts (post-preprocessing) |
-|---|---|---:|
-| r/Anxiety | anxiety_primary | 2,078 |
-| r/socialanxiety | anxiety_primary | 1,382 |
-| r/AnxietyDepression | comorbid | 1,356 |
-| r/depression | depression_primary | 2,218 |
-| r/depression_help | depression_primary | 1,451 |
-| r/SuicideWatch | suicidality (training-only, ethics-restricted) | 2,073 |
-| r/COVID19_support | health_anxiety_enriched | 1,413 |
-| r/COVID19positive | health_anxiety_enriched | 1,615 |
-| r/LivingAlone | baseline | 905 |
-| r/relationship_advice | baseline | 1,891 |
-| **Total** | | **16,382** |
 
-Date range: Jan 2017 → today. Collected via Reddit's public JSON endpoints (`old.reddit.com/r/<sub>/<listing>.json`) at 1.5s/request — no OAuth required. Custom User-Agent identifies academic research intent. 429 rate-limits are retried indefinitely with `Retry-After` honored.
+**38 subreddits, 743,879 posts** spanning seven groups:
+- **anxiety-primary** — Anxiety, socialanxiety, Anxietyhelp, PanicAttack, panicdisorder, agoraphobia, GAD
+- **health-anxiety / somatic** — HealthAnxiety, ibs, emetophobia, dpdr
+- **comorbid** — AnxietyDepression
+- **depression-primary** — depression, depression_help
+- **suicidality** (training-only, ethics-restricted) — SuicideWatch
+- **COVID / chronic-illness** (health-anxiety-enriched) — COVID19_support, CovidLongHaulers, ChronicIllness, COVID19positive, AskDocs
+- **neutral controls** — relationship_advice, personalfinance, CasualConversation, cooking, explainlikeimfive
+- plus related-disorder subs (OCD, PTSD, CPTSD, BPD, BipolarReddit, mentalhealth, LivingAlone)
+
+Per-subreddit post counts in `experiments/exp5_severity_by_subreddit.csv`. Date range: Jan 2017 → today. Collected via Reddit's public JSON endpoints (`old.reddit.com/r/<sub>/<listing>.json`) at 1.5s/request — no OAuth required. Custom User-Agent identifies academic research intent. 429 rate-limits are retried indefinitely with `Retry-After` honored.
 
 ### Clinical instruments referenced
 The lexicons used by tier-1 weak labeling are derived from these published instruments. The thesis cites every list's provenance.
@@ -125,7 +121,7 @@ Python 3.11 · pandas · polars · pyarrow · scikit-learn · XGBoost · PyTorch
 
 ## Real-data results
 
-Trained on 16,382 cleaned + weakly-labeled posts. 80/20 stratified split per experiment.
+Trained on the full **743,879-post / 38-subreddit corpus**. 80/20 stratified split per experiment.
 
 ### Experiment 1 — Per-target classifiers
 
@@ -133,78 +129,78 @@ Trained on 16,382 cleaned + weakly-labeled posts. 80/20 stratified split per exp
 
 | Target | n_pos | TF-IDF F1 | XGBoost F1 | XGBoost AUROC | XGBoost ECE |
 |---|---:|---:|---:|---:|---:|
-| anxiety | 3,560 | **0.874** | 0.864 | 0.984 | 0.034 |
-| health_anxiety | 24 | 0.750 | **1.000** ⚠️ | 1.000 | 0.000 |
-| depression | 1,557 | 0.708 | **0.742** | 0.976 | 0.035 |
-| suicidality | 116 | 0.571 | **0.792** | 0.998 | 0.003 |
+| anxiety | 69,010 | **0.850** | 0.801 | 0.989 | 0.042 |
+| health_anxiety | 2,544 | **0.500** | 0.452 | 0.992 | 0.013 |
+| depression | 10,659 | **0.622** | 0.539 | 0.990 | 0.030 |
+| suicidality | 458 | 0.406 | **0.571** ⚠️ | 1.000 | 0.001 |
 
-Key observation: **XGBoost on 26 linguistic features matches or beats the 80,000-feature TF-IDF text model on 3 of 4 targets**, with ~4× better calibration. The hand-crafted features carry most of the predictive signal.
+Key observation: **at full scale the 80,000-feature TF-IDF text model overtakes the 26 hand-crafted features on 3 of 4 targets** — the reverse of the 16k snapshot (where features matched text); with 744k posts there's enough text signal for the high-dimensional model to win. And **health-anxiety F1 is now an honest 0.500** (2,544 positives), not the circular 1.000 the 24-positive snapshot produced.
 
-⚠️ Health-anxiety F1 = 1.00 is a small-sample artifact (24 positives, model has direct lexicon-feature access, label was lexicon-derived → circular). See [`docs/experiments.md`](docs/experiments.md) §1 for full caveats.
+⚠️ Suicidality XGBoost F1 = 0.571 / AUROC ≈ 1.000 is circular (the model reads `f_suic_term_rate`, the lexicon that derived the label). See [`docs/experiments.md`](docs/experiments.md) §1.
 
 ### Experiment 2 — Cross-subreddit transfer (RQ3)
 
-Train on r/{Anxiety, socialanxiety, AnxietyDepression}, test on r/{COVID19_support, LivingAlone, relationship_advice}.
+Train on r/{Anxiety, socialanxiety, AnxietyDepression} (n=54,360), test on r/{COVID19_support, LivingAlone, relationship_advice} (n=96,922).
 
 | Split | F1 | Precision | Recall | AUROC |
 |---|---:|---:|---:|---:|
-| in-distribution | **0.889** | 0.924 | 0.856 | 0.929 |
-| cross-subreddit | **0.331** | 0.202 | 0.930 | 0.967 |
+| in-distribution | **0.934** | 0.953 | 0.916 | 0.991 |
+| cross-subreddit | **0.308** | 0.183 | 0.972 | 0.993 |
 
-**The most diagnostically interesting finding so far.** F1 collapses by −0.557 but AUROC actually *rises slightly* (+0.038): the **ranking** of posts by anxiety score generalizes — in fact ranking is better cross-distribution because positives there are clear outliers — but the **decision threshold** trained on r/Anxiety over-fires on r/relationship_advice. The model has learned a real anxiety signal; it just needs per-population threshold calibration to deploy.
+**The most diagnostically interesting finding** — and sharper at full scale. F1 collapses by −0.626 (0.934 → 0.308) yet AUROC is unchanged (0.99): the **ranking** of posts by anxiety score generalizes, but the **decision threshold** trained on r/Anxiety over-fires on r/relationship_advice. The model learned a real anxiety signal that just needs per-population threshold calibration — which the per-subreddit-threshold extension delivers (macro-F1 0.719 → 0.781).
 
-### Experiment 3 — 9-way subreddit classifier
+### Experiment 3 — 38-way subreddit classifier
 
-- **Macro-F1 = 0.643** (random ≈ 0.10) — substantial but not perfect linguistic distinctiveness.
-- r/depression / r/depression_help / r/AnxietyDepression heavily mutually-confused (depression-family). r/SuicideWatch and r/relationship_advice mostly self-classified.
+- **Macro-F1 = 0.407** (random ≈ 0.026 for 38 classes, ~15×) — substantial distinctiveness across all communities (vs 0.64 on the easier 10-sub snapshot).
+- Anxiety / depression / COVID-chronic-illness clusters are mutually confused; neutral controls (cooking, personalfinance) and r/SuicideWatch self-classify well.
 
 ### Experiment 4 — Per-target linguistic markers
 
 | Target | Top feature | Cohen's d | # significant (BH p<0.05) |
 |---|---|---:|---:|
-| anxiety | `f_anx_term_rate` | +2.60 | **22** |
-| health_anxiety | `f_health_anx_term_rate` | +11.77 ⚠️ | 5 |
-| depression | `f_dep_term_rate` | +2.86 | **19** |
-| suicidality | `f_suic_term_rate` | +7.10 | **13** |
+| anxiety | `f_anx_term_rate` | +3.25 | **26** |
+| health_anxiety | `f_health_anx_term_rate` | +7.52 | **24** |
+| depression | `f_dep_term_rate` | +4.53 | **25** |
+| suicidality | `f_suic_term_rate` | +10.83 | **20** |
 
-The cross-target heatmap (`docs/figures/exp4__marker_heatmap.png`) shows two clinically meaningful patterns:
+The cross-target heatmap (`docs/figures/exp4__marker_heatmap.png`) shows clinically meaningful patterns:
 
-1. **`f_third_rate` (third-person pronouns) is consistently negative across all 4 targets** — replicates Pennebaker on first-person preponderance in distress.
-2. **`f_sent_neg` rises monotonically with target severity**: anxiety +0.33 → health_anxiety +0.38 → depression +0.67 → suicidality +1.08.
-3. **`f_reassurance_count` (+0.99) and `f_health_anx_phrase_count` (+1.05) are uniquely health-anxiety-specific** — basically SHAI item content.
+1. **`f_first_sing_rate` is positive and `f_third_rate` negative for anxiety / health_anxiety / depression** (+0.37/+0.41/+0.43 vs −0.32/−0.28/−0.19) — replicates Pennebaker & Rude on first-person self-focus in distress.
+2. **`f_sent_neg` rises with target severity**: anxiety +0.74 → health_anxiety +0.70 → depression +0.94 → suicidality +1.35.
+3. **`f_health_anx_phrase_count` (+0.56) is health-anxiety-specific** (SHAI phrase content). *Honest correction at scale:* `f_reassurance_count` is **no longer** health-anxiety-specific (≈0.12–0.19 across all targets), unlike the 16k snapshot — reassurance phrases are too sparse to discriminate at the post level.
 
 ### Experiment 5 — Health-anxiety severity ranking (continuous)
 
 | Subreddit | mean health-anxiety score |
 |---|---:|
-| **r/COVID19_support** | **0.239** |
-| **r/COVID19positive** | **0.232** |
-| r/Anxiety | 0.122 |
-| r/AnxietyDepression | 0.083 |
+| **r/HealthAnxiety** | **0.488** |
+| r/COVID19_support | 0.231 |
+| r/covidlonghaulers | 0.224 |
+| r/ChronicIllness | 0.211 |
 
-Both COVID subreddits score ~2× r/Anxiety, validating their inclusion as the `health_anxiety_enriched` group.
+r/HealthAnxiety dominates (~2× the next community); the COVID / chronic-illness / somatic cluster follows, validating the `health_anxiety_enriched` grouping. Neutral controls (cooking ≈ 0.006) sit at the bottom — the score discriminates *health* anxiety, not general distress.
 
-### Experiment 6 — Modern baselines (MentalRoBERTa single-target + multi-task)
+### Experiment 6 — MentalRoBERTa multi-task transformer (full corpus)
 
-Fine-tuned `mental/mental-roberta-base` on the same tier-1-labeled corpus, 4 epochs, lr=2e-5, max_length=256, on an RTX 4090. Single-target run trained one binary head for anxiety; multi-task run trained a shared encoder + 4 sigmoid heads simultaneously with per-task loss weights `{anxiety: 1.0, health_anxiety: 1.5, depression: 1.0, suicidality: 1.2}` and per-row confidence weights from the labeling source (disclosure=0.85, weak=0.4).
+Shared `mental/mental-roberta-base` encoder + 4 sigmoid heads, per-task loss weights `{anxiety: 1.0, health_anxiety: 1.5, depression: 1.0, suicidality: 1.2}`, trained on a **200k full-corpus sample** (3 epochs, lr=2e-5, max_length=256, RTX 4090) and evaluated on a **held-out 30k test set** disjoint from training. `scripts/train_multitask_fullcorpus.py` + `scripts/exp6_transformer_fullcorpus.py`.
 
-**RQ1 headline table — F1 [bootstrap 95% CI] across all four model families × four targets:**
+**RQ1 headline table — F1 across model families × targets (full corpus):**
 
-| Target | n_pos | TF-IDF + LogReg | XGBoost-linguistic | MentalRoBERTa (single) | MentalRoBERTa (multi-task) |
-|---|---:|---:|---:|---:|---:|
-| anxiety | 3,560 | 0.874 | 0.864 | **0.891** [0.87, 0.91] | **0.894** [0.87, 0.91] |
-| depression | 1,557 | 0.708 | **0.742** | — | 0.720 [0.68, 0.76] |
-| health_anxiety | 24 | 0.750 | 1.000 ⚠ | — | **0.333** [0.00, 0.82] |
-| suicidality | 116 | 0.571 | 0.792 ⚠ | — | 0.647 [0.43, 0.82] |
+| Target | n_pos | TF-IDF + LogReg | XGBoost-linguistic | MentalRoBERTa (multi-task) |
+|---|---:|---:|---:|---:|
+| anxiety | 69,010 | 0.850 | 0.801 | **0.862** |
+| depression | 10,659 | 0.622 | 0.539 | **0.686** |
+| health_anxiety | 2,544 | 0.500 | 0.452 ⚠ | **0.573** |
+| suicidality | 458 | 0.406 | 0.571 ⚠ | **0.500** |
 
-⚠ XGBoost-linguistic reads `f_health_anx_term_rate` and `f_suic_term_rate` directly — the same lexicons that derived the labels — so its rare-class F1 is **circular**, not a real result. The MentalRoBERTa numbers are the **honest** ones: the transformer sees only text, and its F1 of 0.333 on health_anxiety (with only 3 test positives, CI [0.00, 0.82]) reflects the actual ceiling at tier-1 label support.
+The transformer posts **AUROC 0.98–0.99 on all four targets, ECE ≤ 0.01**. ⚠ XGBoost rare-class F1 is circular (reads the label-defining lexicons); the transformer numbers are the honest ones. (F1s come from different held-out splits per model family — read as same-corpus indicators, not a paired comparison.)
 
-**What the multi-task run actually proves:**
+**What the full-corpus run proves:**
 
-1. **Multi-task does not degrade the well-represented class.** Anxiety F1 0.894 (multi) vs 0.891 (single) — within CI overlap, and arguably a tiny gain. This is the standard prerequisite test for shared encoders, and it passes.
-2. **Calibration is excellent across the board** — ECE 0.001–0.039 for the transformer; no temperature scaling needed.
-3. **Health-anxiety F1 = 0.333 with CI [0.000, 0.818]** reflects how few weak-label health-anxiety positives existed in the earlier 16k corpus (24) — below the data-efficiency frontier for transformer fine-tuning. The dedicated r/HealthAnxiety-vs-r/Anxiety head-to-head (Experiment 8) tackles this directly. The next big win comes from labels/data, not architecture.
-4. **Bootstrap CIs are wide for rare classes** (suicidality CI width = 0.39, health-anxiety = 0.82), and that's how it should be: point estimates on 3–20 positives are not science.
+1. **The transformer leads on every target** and is excellently calibrated (ECE ≤ 0.01) without temperature scaling.
+2. **Health-anxiety is now a real, measurable class** — F1 0.573 / AUROC 0.984 on 2,544 corpus positives. The 16k snapshot's F1 = 0.333 on 24 positives was a data-starvation ceiling, now lifted.
+3. **Rare-class F1 is bounded by imbalance, not the model** — suicidality (458 positives) and health_anxiety post AUROC ≈ 0.98–0.99; only the positive count limits F1.
+4. **These are weak-label metrics** — the honest, non-circular evaluations are the self-disclosure test (Exp 7), the HA-vs-anxiety head-to-head (Exp 8), and the external corpora RMHD/ANGST.
 
 ---
 
@@ -463,7 +459,7 @@ All figures generated from the real collected data. Corpus-level figures via `an
 ### Per-target marker heatmap (Exp 4)
 ![Marker heatmap](docs/figures/exp4__marker_heatmap.png)
 
-### 9-way subreddit confusion (Exp 3)
+### 38-way subreddit confusion (Exp 3)
 ![Subreddit confusion](docs/figures/exp3__subreddit_confusion.png)
 
 ---
@@ -486,72 +482,10 @@ All figures generated from the real collected data. Corpus-level figures via `an
 ### Label co-occurrence
 ![Label co-occurrence](docs/figures/label_cooccurrence.png)
 
-### Model performance — ROC and PR curves
-![PR / ROC](docs/figures/pr_roc__anxiety.png)
+### Multi-task MentalRoBERTa — per-target results (Exp 6, full corpus)
+![Experiment 6 transformer](docs/figures/exp6_transformer_fullcorpus.png)
 
-### Calibration — reliability diagram + score histogram
-TF-IDF ECE = 0.132 on anxiety: the model is **over-confident**. The XGBoost-linguistic model achieves ECE = 0.034 on the same target — ~4× better. Apply temperature scaling (Platt) to TF-IDF — `src/evaluation/metrics.py` exposes the data.
-![Calibration](docs/figures/calibration__anxiety.png)
-
-### Confusion matrix
-![Confusion](docs/figures/confusion__anxiety.png)
-
-### F1 by subreddit — distribution-shift signal
-![F1 by subreddit](docs/figures/subreddit_f1__anxiety.png)
-
-### Top discriminative linguistic markers
-Stars: `***`p<0.001, `**`p<0.01, `*`p<0.05 (Benjamini-Hochberg FDR).
-![Linguistic markers](docs/figures/markers__anxiety.png)
-
----
-
-### Multi-task MentalRoBERTa — per-target results (Exp 6)
-
-All four plots below come from `experiments/runs/multitask_anxiety_health_dep_suic/` and were generated by `anxiety plot --run-dir experiments/runs/multitask_anxiety_health_dep_suic`. Each target has its own PR/ROC, calibration, confusion, and per-subreddit F1 plot — together these are the headline RQ1 evidence.
-
-#### PR / ROC curves
-
-| anxiety | depression |
-|---|---|
-| ![PR/ROC anxiety](docs/figures/pr_roc__anxiety.png) | ![PR/ROC depression](docs/figures/pr_roc__depression.png) |
-
-| health_anxiety | suicidality |
-|---|---|
-| ![PR/ROC health_anxiety](docs/figures/pr_roc__health_anxiety.png) | ![PR/ROC suicidality](docs/figures/pr_roc__suicidality.png) |
-
-#### Calibration (reliability diagrams)
-
-| anxiety | depression |
-|---|---|
-| ![Calibration anxiety](docs/figures/calibration__anxiety.png) | ![Calibration depression](docs/figures/calibration__depression.png) |
-
-| health_anxiety | suicidality |
-|---|---|
-| ![Calibration health_anxiety](docs/figures/calibration__health_anxiety.png) | ![Calibration suicidality](docs/figures/calibration__suicidality.png) |
-
-Transformer ECE 0.001–0.039 across all four targets — no temperature scaling needed.
-
-#### Confusion matrices
-
-| anxiety | depression |
-|---|---|
-| ![Confusion anxiety](docs/figures/confusion__anxiety.png) | ![Confusion depression](docs/figures/confusion__depression.png) |
-
-| health_anxiety | suicidality |
-|---|---|
-| ![Confusion health_anxiety](docs/figures/confusion__health_anxiety.png) | ![Confusion suicidality](docs/figures/confusion__suicidality.png) |
-
-#### Per-subreddit F1 — the distribution-shift diagnostic
-
-Same finding as Exp 2 (precision collapses on subreddits with few positives) now visible at the per-subreddit level for each target.
-
-| anxiety | depression |
-|---|---|
-| ![F1-by-sub anxiety](docs/figures/subreddit_f1__anxiety.png) | ![F1-by-sub depression](docs/figures/subreddit_f1__depression.png) |
-
-| health_anxiety | suicidality |
-|---|---|
-| ![F1-by-sub health_anxiety](docs/figures/subreddit_f1__health_anxiety.png) | ![F1-by-sub suicidality](docs/figures/subreddit_f1__suicidality.png) |
+The full-corpus multitask transformer reaches **AUROC 0.98–0.99 on all four targets with ECE ≤ 0.01** (held-out 30k test). Detailed per-target diagnostics (PR/ROC, reliability diagrams, confusion matrices, per-subreddit F1) can be regenerated on the full-corpus checkpoint via `anxiety evaluate experiments/runs/multitask_fullcorpus`. Calibration, per-subreddit threshold, SHAP, eRisk, fairness, and external-validation figures are in their respective sections above.
 
 ---
 
