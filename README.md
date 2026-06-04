@@ -302,6 +302,23 @@ The global threshold (0.647) is a compromise dragged high by the dense anxiety s
 
 ---
 
+### Statistical significance of model comparisons
+
+Every A-beats-B claim deserves a p-value. McNemar's test (on each model's decisions) + paired bootstrap (ΔAUROC, 95% CI) on predictions aligned by shared post `id`. `src/evaluation/significance.py`, `scripts/significance.py`.
+
+| comparison (anxiety) | n | McNemar p | ΔAUROC [95% CI] | significant? |
+|---|---:|---:|---|:--:|
+| multitask vs single-task | 2458 | 0.83 | −0.003 [−0.006, +0.001] | **no** |
+| mentalbert vs TF-IDF | 225 | 0.58 | +0.007 [−0.019, +0.039] | no |
+| multitask vs TF-IDF | 225 | 0.10 | +0.006 [−0.022, +0.042] | no |
+
+![significance forest plot](docs/figures/significance.png)
+
+1. **Multi-task = single-task on anxiety, confirmed** (n=2458, p=0.83, discordances 40 vs 43, ΔAUROC CI straddles 0): the shared encoder adds three extra targets **at no measurable cost** to the dense class — finding #2 is now defensible, not anecdotal.
+2. **The transformer's edge over TF-IDF on anxiety is *not* significant** (n=225; ΔAUROC ~+0.006, CI spans 0; the comparison is underpowered). The transformer earns its place on the HA-vs-anxiety task (Exp 8), multi-task efficiency, and calibration — **not** by beating the linear baseline on anxiety AUROC. Full table in [docs/significance.md](docs/significance.md).
+
+---
+
 ## Visual gallery
 
 All figures generated from the real collected data. Corpus-level figures via `anxiety plot`; experiment figures via `python scripts/run_experiments.py`.
