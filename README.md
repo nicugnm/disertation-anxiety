@@ -403,6 +403,16 @@ Internal splits only prove internal validity (cf. Ernala et al. 2019). The stron
 
 ---
 
+### SHAI-item symptom decomposition
+
+Connects the model to the clinical instrument's structure (absent from prior work, e.g. Low 2020): every post is scored on the seven **SHAI** clinical dimensions (Salkovskis 2002) — illness worry, bodily vigilance, serious-illness fear, symptom checking, reassurance seeking, difficulty being reassured, medical help seeking. `src/features/shai.py`, `scripts/shai_decomposition.py`.
+
+![SHAI decomposition](docs/figures/shai_decomposition.png)
+
+**r/HealthAnxiety vs r/Anxiety, mean rate (×1000):** illness_worry **3.84 vs 0.34** (11×), serious_illness_fear **3.2 vs 0.8** (4×), symptom_checking **0.18 vs 0.03** (6×). Health anxiety is *not* just "more anxiety" — it is illness-worry + serious-illness fear + symptom-checking, exactly the SHAI constructs that separate it from general anxiety. The strongest single discriminator of the health-anxiety label is **serious_illness_fear (point-biserial r = +0.30)**, then illness_worry (+0.11) and bodily_vigilance (+0.11); the behavioural dimensions (reassurance-seeking, medical-help-seeking) are weaker text signals. The heatmap also recovers sensible profiles elsewhere — panic/COVID subs load on bodily_vigilance, r/AskDocs on serious-illness fear + help-seeking. Full tables in [docs/shai_decomposition.md](docs/shai_decomposition.md).
+
+---
+
 ## Visual gallery
 
 All figures generated from the real collected data. Corpus-level figures via `anxiety plot`; experiment figures via `python scripts/run_experiments.py`.
