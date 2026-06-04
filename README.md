@@ -290,6 +290,18 @@ Are the predicted probabilities trustworthy as confidences? Temperature scaling 
 
 ---
 
+### Per-subreddit threshold calibration
+
+A single global decision threshold is wrong almost everywhere: base rates and language intensity differ per community. Fitting a **best-F1 threshold per subreddit** (on an author-disjoint calibration split, global fallback for sparse subs) and applying each community's own cutoff at test time recovers F1 lost to the operating-point mismatch — **with the same model**. TF-IDF baseline, anxiety, 200k/80k/80k author-disjoint split. `src/evaluation/thresholds.py`, `scripts/threshold_calibration.py`.
+
+**macro-F1 0.719 → 0.781 (+0.062), pooled-F1 0.830 → 0.888 (+0.058)** — 19/19 subreddits tuned.
+
+![Per-subreddit thresholds](docs/figures/threshold_calibration.png)
+
+The global threshold (0.647) is a compromise dragged high by the dense anxiety subs. **Low-prevalence communities get a much higher cutoff** (OCD 0.78, CPTSD/ibs/mentalhealth/PTSD 0.91–0.96) — the global was far too lenient there and false-fired, so raising it gives the biggest gains (**mentalhealth +0.214, PTSD +0.213, ibs +0.167**). **Dense anxiety subs get a lower cutoff** (Anxiety 0.39, socialanxiety 0.35) — the global was slightly too strict and missed positives (**socialanxiety +0.056, AnxietyDepression +0.058**). The improvement is concentrated where it matters clinically — fewer false alarms on general/low-prevalence communities. Deployment needs the subreddit at inference + enough labeled positives per community to tune (else global fallback). Full table in [docs/threshold_calibration.md](docs/threshold_calibration.md).
+
+---
+
 ## Visual gallery
 
 All figures generated from the real collected data. Corpus-level figures via `anxiety plot`; experiment figures via `python scripts/run_experiments.py`.
