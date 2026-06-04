@@ -333,6 +333,27 @@ Takeaway for the discussion chapter: the linguistic model's *primary* signal is 
 
 ---
 
+### eRisk early-detection metrics
+
+Reframes the classifier as a CLEF-eRisk early-detection system: order each user's posts in time, **mask the disclosure post**, flag at the first post crossing the threshold, and score how *early* and *accurately* disclosed users are caught. ERDE₅/₅₀ (Losada & Crestani 2016), latency-weighted F1 (Sadeque 2018). `src/evaluation/erisk.py`, `scripts/erisk_eval.py`. 258 disclosed-anxiety users vs 3258 controls, threshold 0.5.
+
+| model | target | ERDE₅ | ERDE₅₀ | precision | recall | median latency |
+|---|---|---:|---:|---:|---:|---:|
+| mentalbert | anxiety | **0.0565** | 0.0503 | 0.109 | 0.783 | **1 post** |
+| multitask | anxiety | 0.0568 | 0.0507 | 0.108 | 0.779 | 1 post |
+| tfidf | anxiety | 0.0569 | 0.0514 | 0.108 | 0.764 | 1 post |
+| multitask | depression | 0.136 | 0.118 | 0.240 | 0.359 | 3 posts |
+| multitask | health_anxiety | 0.040 | 0.038 | 0.276 | 0.057 | 14 posts |
+
+![eRisk ERDE](docs/figures/erisk.png)
+
+1. **Anxiety is detectable very early** — median **1 post** to flag at recall 0.78, *from the masked stream*: the signal is pervasive across a disclosed user's history, not concentrated in the "I was diagnosed" post. This is what makes early detection viable.
+2. **The three models are statistically tied** (ERDE₅ 0.0565–0.0569), echoing the significance result from the early-detection angle.
+3. **At threshold 0.5 the system is high-recall / low-precision** (0.78 / 0.11) — the operating point is the lever, tying directly to the calibration and per-subreddit-threshold results above.
+4. **health_anxiety stays the hard case** (recall 0.057, 14 posts to detect). Full table in [docs/erisk.md](docs/erisk.md).
+
+---
+
 ## Visual gallery
 
 All figures generated from the real collected data. Corpus-level figures via `anxiety plot`; experiment figures via `python scripts/run_experiments.py`.
