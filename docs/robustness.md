@@ -1,0 +1,22 @@
+# Robustness audit — meaning-preserving perturbations
+
+How often each model's anxiety decision flips when test posts are lightly corrupted (fraction p=0.5 of words edited; punctuation stripping applies to all). Lightweight TextBugger-style perturbations (no TextAttack), seeded. **Lower flip rate / score drift = more robust.** Threshold 0.5.
+
+_Regenerate: `python scripts/robustness_audit.py`_
+
+| model | perturbation | flip_rate | score_drift | acc_clean | acc_perturbed | acc_drop |
+|---|---|---|---|---|---|---|
+| tfidf | char_swap | 0.0412 | 0.0498 | 0.9648 | 0.9484 | 0.0164 |
+| tfidf | char_delete | 0.042 | 0.0492 | 0.9648 | 0.95 | 0.0148 |
+| tfidf | keyboard_typo | 0.044 | 0.0531 | 0.9648 | 0.948 | 0.0168 |
+| tfidf | case_flip | 0.0 | 0.0 | 0.9648 | 0.9648 | 0.0 |
+| tfidf | punct_strip | 0.0072 | 0.0094 | 0.9648 | 0.9616 | 0.0032 |
+| tfidf | social_elongate | 0.0488 | 0.0604 | 0.9648 | 0.9464 | 0.0184 |
+| transformer | char_swap | 0.0412 | 0.0428 | 0.9756 | 0.952 | 0.0236 |
+| transformer | char_delete | 0.0404 | 0.0421 | 0.9756 | 0.9536 | 0.022 |
+| transformer | keyboard_typo | 0.0468 | 0.046 | 0.9756 | 0.9496 | 0.026 |
+| transformer | case_flip | 0.042 | 0.0432 | 0.9756 | 0.9512 | 0.0244 |
+| transformer | punct_strip | 0.0112 | 0.0113 | 0.9756 | 0.9748 | 0.0008 |
+| transformer | social_elongate | 0.0448 | 0.0448 | 0.9756 | 0.9516 | 0.024 |
+
+![robustness](figures/robustness.png)

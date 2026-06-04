@@ -354,6 +354,25 @@ Reframes the classifier as a CLEF-eRisk early-detection system: order each user'
 
 ---
 
+### Robustness to meaning-preserving perturbations
+
+How often does each model's anxiety decision flip when posts are lightly corrupted? Lightweight TextBugger-style perturbations (char swaps, keyboard typos, deletions, case flips, punctuation stripping, social-media elongation), seeded — **not** TextAttack, which would force-downgrade `transformers`/`torch` and break the stack. `src/evaluation/robustness.py`, `scripts/robustness_audit.py`. (Flip rate at **p=0.5**, i.e. half of words edited.)
+
+| perturbation | TF-IDF flip | transformer flip |
+|---|---:|---:|
+| char_swap | 0.041 | 0.041 |
+| char_delete | 0.042 | 0.040 |
+| keyboard_typo | 0.044 | 0.047 |
+| case_flip | **0.000** | 0.042 |
+| punct_strip | 0.007 | 0.011 |
+| social_elongate | 0.049 | 0.045 |
+
+![robustness](docs/figures/robustness.png)
+
+**Both models are robust** — even with *half* the words corrupted, decisions flip <5% of the time and accuracy drops <3%. My prior (TF-IDF would be fragile to typos) was **not supported**: (1) the anxiety signal is **redundant** across a post, so corrupting a fraction of words rarely moves the aggregate decision; (2) **TF-IDF is fully case-immune** (its vectorizer lowercases) and barely affected by punctuation; (3) the subword transformer and the linear model are comparable. This is reassuring for deployment on noisy social-media text. Full table in [docs/robustness.md](docs/robustness.md).
+
+---
+
 ## Visual gallery
 
 All figures generated from the real collected data. Corpus-level figures via `anxiety plot`; experiment figures via `python scripts/run_experiments.py`.
