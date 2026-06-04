@@ -36,7 +36,7 @@ from src.utils.io import read_parquet
 DATA = "data/processed/labeled.parquet"
 RMHD_DIR = "data/external/rmhd"
 ANGST_DIR = "data/external/angst"
-TRANSFORMER_DIR = "experiments/runs/multitask_anxiety_health_dep_suic/model"
+TRANSFORMER_DIR = "experiments/runs/multitask_fullcorpus/model"  # full-corpus, like-for-like vs TF-IDF
 TARGET = "anxiety"
 SEED = 42
 POS_SUBS = ["anxiety", "healthanxiety", "socialanxiety"]
