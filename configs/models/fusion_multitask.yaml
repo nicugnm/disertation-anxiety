@@ -1,0 +1,50 @@
+name: fusion_multitask
+model_type: fusion_multitask
+text_field: clean_text
+
+# Architecture-surgery variant of the multi-task transformer. Each block below is
+# an independently-ablatable modification (the exp_fusion_ablation script toggles them).
+targets:
+  - anxiety
+  - health_anxiety
+  - depression
+  - suicidality
+
+pretrained: mental/mental-roberta-base
+fallback_pretrained: roberta-base
+
+tokenizer:
+  max_length: 256
+
+# --- architecture-surgery flags ---
+fusion:                       # clinical feature fusion (26 linguistic + 7 SHAI)
+  enabled: true
+  dropout: 0.1
+  use_layernorm: true
+attn_pool:                    # learned additive attention pooling (vs mean-pool)
+  enabled: false
+  attn_dim: 128
+focal:                        # focal loss for rare classes (gamma=0 -> plain BCE)
+  enabled: true
+  gamma: 2.0
+  class_balanced: false
+  beta: 0.999
+activation: gelu              # gelu | relu | silu (heads / fusion MLP)
+
+train:
+  per_device_train_batch_size: 16
+  num_train_epochs: 5
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  fp16: false
+
+loss_weights:
+  anxiety: 1.0
+  health_anxiety: 1.5
+  depression: 1.0
+  suicidality: 1.2
+
+splits:
+  test_size: 0.15
+  val_size: 0.15

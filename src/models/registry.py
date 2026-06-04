@@ -26,6 +26,10 @@ def build_model(config: ModelConfig) -> BaseModel:
         from src.models.dann import DannMultiTaskModel
 
         return DannMultiTaskModel(config)
+    if config.model_type == "fusion_multitask":
+        from src.models.fusion import FusionMultiTaskModel
+
+        return FusionMultiTaskModel(config)
     if config.model_type == "llm_zero_shot":
         from src.models.llm_zero_shot import LlmZeroShotModel
 
