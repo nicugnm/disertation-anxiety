@@ -177,11 +177,14 @@ class MultiTaskTransformer(BaseModel):
         optimizer = optim.AdamW(self.model.parameters(), lr=lr, weight_decay=wd)
         loss_fn = nn.BCEWithLogitsLoss(reduction="none")
 
+        from tqdm.auto import tqdm
+
         for epoch in range(epochs):
             self.model.train()
             total_loss = 0.0
             n_batches = 0
-            for batch in dl_train:
+            bar = tqdm(dl_train, desc=f"multitask epoch {epoch + 1}/{epochs}", leave=False)
+            for batch in bar:
                 batch = {k: v.to(self._device) for k, v in batch.items()}
                 optimizer.zero_grad()
                 logits = self.model(input_ids=batch["input_ids"], attention_mask=batch["attention_mask"])
@@ -193,6 +196,7 @@ class MultiTaskTransformer(BaseModel):
                 optimizer.step()
                 total_loss += float(loss.item())
                 n_batches += 1
+                bar.set_postfix(loss=f"{loss.item():.3f}")
             log.info("multitask.epoch", epoch=epoch + 1, loss=total_loss / max(1, n_batches))
 
             if val is not None and not val.empty:
@@ -230,11 +234,13 @@ class MultiTaskTransformer(BaseModel):
             mask = pad_sequence([torch.tensor(b[1], dtype=torch.long) for b in batch], batch_first=True, padding_value=0)
             return ids, mask
 
+        from tqdm.auto import tqdm
+
         loader = DataLoader(_DSPred(), batch_size=64, collate_fn=collate)
         self.model.eval()
         all_p: list[np.ndarray] = []
         with torch.no_grad():
-            for ids, mask in loader:
+            for ids, mask in tqdm(loader, desc="predict", leave=False):
                 ids = ids.to(self._device)
                 mask = mask.to(self._device)
                 logits = self.model(input_ids=ids, attention_mask=mask)

@@ -1,6 +1,6 @@
 # Experiments — what we achieved, what we used, what we found
 
-Seven classification/evaluation studies executed on the **real collected corpus** (16,382 posts, 10 subreddits) using only the data + lexicons + linguistic features that exist today — no LLM API calls, no human annotators required. Experiments 1–5 use weak labels; Experiment 6 adds transformer models; Experiment 7 evaluates against the self-disclosure user-level test set; Experiment 8 is a head-to-head on r/HealthAnxiety vs r/Anxiety.
+Nine classification/evaluation studies using only the data + lexicons + linguistic features that exist today — no LLM API calls, no human annotators required. Experiments 1–6 run on the **stale 16,382-post / 10-subreddit snapshot** (weak labels; Experiment 6 adds transformer models); Experiments 7–9 run on the **current 744k-post corpus** — Experiment 7 evaluates against the self-disclosure user-level test set, Experiment 8 is a head-to-head on r/HealthAnxiety vs r/Anxiety, and Experiment 9 tests domain-adversarial (DANN) training (a negative result).
 
 > All results below come from `scripts/run_experiments.py` against `data/processed/labeled.parquet`. Re-run any time with `python scripts/run_experiments.py`. Outputs land in `experiments/` (CSVs + JSON summary) and `docs/figures/exp*.png`.
 
@@ -280,6 +280,35 @@ Results aggregated into `experiments/disclosure_userlevel_summary.csv` and `docs
 | MentalRoBERTa (submissions) | **0.906** | **0.955** | +0.055 |
 
 MentalRoBERTa on submissions beats the Low 2020 baseline by +5.5 weighted-F1 points and achieves AUROC 0.955, demonstrating that health-anxiety language is separable from general-anxiety language beyond the surface features available to a linear model.
+
+---
+
+## Experiment 9 — Domain-adversarial training (DANN): a negative result
+
+`scripts/exp_dann_transfer.py` (figure: `scripts/plot_dann_transfer.py`). Tests whether a **Gradient-Reversal-Layer subreddit discriminator** (Ganin et al., 2016) on top of the multi-task encoder improves cross-subreddit generalisation. Implemented in `src/models/dann.py` (`DannMultiTaskModel`): shared MentalRoBERTa encoder → 4 sigmoid target heads (weighted BCE) **+** a subreddit-discriminator head behind a GRL; loss = `Σ task-BCE + domain-CE`, with the GRL reversing the domain gradient into the encoder. λ ramps 0→0.3 on the Ganin schedule. Two domain granularities are compared (ablation): `domain: subreddit` (27 fine classes) and `domain: group` (7 coarse `configs/subreddits.yaml` groups).
+
+**Protocol.** All three models (plain multitask, DANN-subreddit, DANN-group) train on 60k posts from the in-distribution mental-health subreddits and are evaluated at a **single operating point** (per-target threshold tuned once on the in-distribution val set, then reused everywhere) on three held sets:
+- **in_dist** — held-out authors from the training subreddits.
+- **cross_heldout** — anxiety-bearing subreddits *held out of training* (r/PanicAttack, r/panicdisorder, r/agoraphobia; ~11k anxiety positives in the 20k sample) → measures positive transfer to unseen subreddits.
+- **neutral** — baseline subreddits (cooking, personalfinance, …; ~0 anxiety positives) → `pred_pos_rate` is the false-positive rate; lower is better.
+
+### Results (anxiety)
+
+| Model | in-dist AUROC | cross AUROC | in-dist AUPRC | cross F1 | neutral FP rate |
+|---|---:|---:|---:|---:|---:|
+| **multitask (no DANN)** | **0.986** | 0.992 | **0.891** | 0.940 | **0.012** |
+| **DANN (subreddit)** | 0.961 | 0.985 | 0.726 | **0.957** | 0.014 |
+| **DANN (group)** | 0.706 | 0.799 | 0.198 | 0.665 | 0.181 |
+
+![DANN transfer](figures/dann_transfer.png)
+
+### Conclusion — DANN does not help here, and that is informative
+
+1. **There is no collapse to fix.** The plain multi-task MentalRoBERTa *already* transfers near-perfectly to unseen anxiety subreddits (cross AUROC **0.992**) and false-fires on only **1.2%** of neutral posts. The cross-subreddit collapse documented for **TF-IDF** in Experiment 2 is a property of bag-of-words features keying on subreddit-specific vocabulary; the transformer's representation is already essentially subreddit-invariant for this task.
+2. **Subreddit-DANN matches but does not beat the baseline** (cross F1 marginally higher, cross AUROC marginally lower) and pays a real **in-distribution cost** (AUPRC 0.891 → 0.726). No net benefit.
+3. **Group-DANN actively breaks** — training collapsed (val F1 → 0 by epoch 2), in-dist AUROC fell to 0.71, and it flags **18%** of neutral posts as anxious. **Mechanism:** the coarse domain label (`anxiety_primary`, `depression_primary`, …) is **collinear with the target**, so forcing invariance to "which group" is equivalent to erasing the anxiety signal. Lowering λ to 0.3 did not rescue it; the coarse-domain objective fundamentally conflicts with the task. The fine-grained 27-subreddit domain is decorrelated enough from the binary label to stay stable.
+
+**This validates the main approach:** the fine-tuned multi-task transformer is already domain-robust, so adversarial domain alignment is unnecessary (and, when the domain is collinear with the label, harmful). A rigorous test of a strong, well-motivated hypothesis returning a clean null is a methodological result in its own right.
 
 ---
 

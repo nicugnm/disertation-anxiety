@@ -256,6 +256,22 @@ _Caveat: the submissions test set is small (636 posts), so the F1 bootstrap CI i
 
 ---
 
+### Experiment 9 — Domain-adversarial training (DANN): a rigorous negative result
+
+Does a Gradient-Reversal subreddit discriminator (Ganin et al., 2016) on top of the multi-task encoder improve cross-subreddit generalisation? We compare plain multitask vs DANN with two domain granularities (subreddit = 27 classes, group = 7 classes), training on 60k in-distribution posts and evaluating at a fixed operating point on held-out **anxiety-bearing** subreddits (positive transfer) and **neutral** subreddits (false-positive rate). `src/models/dann.py`, `scripts/exp_dann_transfer.py`.
+
+| Model | in-dist AUROC | cross AUROC | in-dist AUPRC | cross F1 | neutral FP rate |
+|---|---:|---:|---:|---:|---:|
+| **multitask (no DANN)** | **0.986** | 0.992 | **0.891** | 0.940 | **0.012** |
+| **DANN (subreddit)** | 0.961 | 0.985 | 0.726 | **0.957** | 0.014 |
+| **DANN (group)** | 0.706 | 0.799 | 0.198 | 0.665 | 0.181 |
+
+![DANN transfer](docs/figures/dann_transfer.png)
+
+**DANN does not help — and that validates the main approach.** (1) There is **no collapse to fix**: the plain multi-task transformer already transfers near-perfectly to unseen anxiety subreddits (cross AUROC **0.992**) and false-fires on only **1.2%** of neutral posts — the Experiment-2 cross-subreddit collapse was a property of TF-IDF, not the transformer. (2) Subreddit-DANN matches it with no net gain and an in-distribution AUPRC cost (0.891 → 0.726). (3) Group-DANN **collapses** (flags 18% of neutral posts) because the coarse domain label is **collinear with the target** — forcing group-invariance erases the anxiety signal. A clean null from a strong, well-motivated hypothesis is itself a methodological finding. See [docs/experiments.md](docs/experiments.md#experiment-9--domain-adversarial-training-dann-a-negative-result).
+
+---
+
 ## Visual gallery
 
 All figures generated from the real collected data. Corpus-level figures via `anxiety plot`; experiment figures via `python scripts/run_experiments.py`.

@@ -1,0 +1,40 @@
+name: dann_multitask_subreddit
+model_type: dann_multitask
+text_field: clean_text
+
+# Domain-adversarial multi-task: shared encoder + per-target heads + a
+# gradient-reversal subreddit discriminator -> subreddit-invariant features.
+targets:
+  - anxiety
+  - health_anxiety
+  - depression
+  - suicidality
+
+pretrained: mental/mental-roberta-base
+fallback_pretrained: roberta-base
+
+tokenizer:
+  max_length: 256
+
+# --- DANN settings ---
+domain: subreddit       # discriminate the EXACT subreddit (fine-grained, ~38 classes)
+lambda_max: 0.3         # max gradient-reversal strength (gentle — high values destabilise the task head)
+grl_gamma: 10.0         # Ganin ramp steepness (alpha = lambda_max*(2/(1+e^-gamma*p)-1))
+
+train:
+  per_device_train_batch_size: 16
+  num_train_epochs: 5
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  fp16: false
+
+loss_weights:
+  anxiety: 1.0
+  health_anxiety: 1.5
+  depression: 1.0
+  suicidality: 1.2
+
+splits:
+  test_size: 0.15
+  val_size: 0.15

@@ -112,7 +112,7 @@ class LabelingConfig(BaseModel):
 class ModelConfig(BaseModel):
     name: str
     model_type: Literal[
-        "tfidf", "xgboost", "transformer", "multitask_transformer", "llm_zero_shot"
+        "tfidf", "xgboost", "transformer", "multitask_transformer", "dann_multitask", "llm_zero_shot"
     ]
     text_field: str = "clean_text"
     target: str | None = None
@@ -121,9 +121,10 @@ class ModelConfig(BaseModel):
 
     @model_validator(mode="after")
     def _check_targets(self) -> ModelConfig:
-        if self.model_type == "multitask_transformer" and not self.targets:
-            raise ValueError("multitask_transformer requires `targets` list")
-        if self.model_type != "multitask_transformer" and not self.target:
+        multitask_types = ("multitask_transformer", "dann_multitask")
+        if self.model_type in multitask_types and not self.targets:
+            raise ValueError(f"{self.model_type} requires `targets` list")
+        if self.model_type not in multitask_types and not self.target:
             raise ValueError(f"{self.model_type} requires `target`")
         return self
 

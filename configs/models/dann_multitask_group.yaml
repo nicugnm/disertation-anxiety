@@ -1,0 +1,39 @@
+name: dann_multitask_group
+model_type: dann_multitask
+text_field: clean_text
+
+# Domain-adversarial multi-task, coarse domain = subreddit GROUP.
+targets:
+  - anxiety
+  - health_anxiety
+  - depression
+  - suicidality
+
+pretrained: mental/mental-roberta-base
+fallback_pretrained: roberta-base
+
+tokenizer:
+  max_length: 256
+
+# --- DANN settings ---
+domain: group           # discriminate the configs/subreddits.yaml group (~6 classes)
+lambda_max: 0.3         # gentle — high values destabilise the task head
+grl_gamma: 10.0
+
+train:
+  per_device_train_batch_size: 16
+  num_train_epochs: 5
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  fp16: false
+
+loss_weights:
+  anxiety: 1.0
+  health_anxiety: 1.5
+  depression: 1.0
+  suicidality: 1.2
+
+splits:
+  test_size: 0.15
+  val_size: 0.15
