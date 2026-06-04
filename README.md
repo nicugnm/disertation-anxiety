@@ -272,6 +272,24 @@ Does a Gradient-Reversal subreddit discriminator (Ganin et al., 2016) on top of 
 
 ---
 
+### Calibration — temperature scaling (post-hoc)
+
+Are the predicted probabilities trustworthy as confidences? Temperature scaling (Guo et al., 2017) fits a single scalar **T** on a held-out half of each model's test predictions (`p' = sigmoid(logit(p)/T)`) and is evaluated on the other half. It is monotonic, so **AUROC is unchanged** — only calibration (ECE/Brier) moves. `src/evaluation/calibration.py`, `scripts/calibrate.py`.
+
+| Model | target | T | ECE before | ECE after | Δ |
+|---|---|---:|---:|---:|---:|
+| **TF-IDF + LogReg** | anxiety | **0.27** | **0.200** | **0.035** | **−82%** |
+| MentalRoBERTa (single) | anxiety | 1.23 | 0.031 | 0.024 | −23% |
+| multitask | anxiety | 1.71 | 0.038 | 0.035 | −7% |
+| multitask | depression | 1.65 | 0.030 | 0.032 | +8% |
+| multitask | suicidality | 1.10 | 0.005 | 0.005 | ~0 |
+
+![TF-IDF calibration](docs/figures/calibration_tfidf_logreg__anxiety.png)
+
+**Findings:** (1) The **TF-IDF baseline was badly under-confident** (T = 0.27 < 1 — probabilities squashed toward 0.5 by `class_weight="balanced"` + regularization). Temperature scaling **sharpens** them and cuts ECE by **82%** (0.200 → 0.035) — the clear headline. (2) The **transformers are already well-calibrated** out of the box (ECE 0.005–0.038); scaling gives only a mild improvement on anxiety (T 1.2–1.7, mild overconfidence) and a no-op-or-slightly-worse on the already-tiny-ECE depression/suicidality heads. (3) **Lesson:** calibrate the linear baseline (large win); apply post-hoc scaling to the transformer only where a validation set shows it helps — forcing it on an already-calibrated head can slightly *hurt*. Full table + all reliability diagrams in [docs/calibration.md](docs/calibration.md).
+
+---
+
 ## Visual gallery
 
 All figures generated from the real collected data. Corpus-level figures via `anxiety plot`; experiment figures via `python scripts/run_experiments.py`.
