@@ -1,6 +1,6 @@
 # Experiments — what we achieved, what we used, what we found
 
-Nine classification/evaluation studies, **all run on the current 743,879-post / 38-subreddit corpus** — no LLM API calls, no human annotators required. Experiments 1–5 compare weak-label classifiers (TF-IDF + LogReg, XGBoost-linguistic); Experiment 6 adds the MentalRoBERTa transformer; Experiment 7 evaluates against the self-disclosure user-level test set; Experiment 8 is a head-to-head on r/HealthAnxiety vs r/Anxiety; Experiment 9 tests domain-adversarial (DANN) training (a negative result).
+Ten classification/evaluation studies, **all run on the current 743,879-post / 38-subreddit corpus** — no LLM API calls, no human annotators required. Experiments 1–5 compare weak-label classifiers (TF-IDF + LogReg, XGBoost-linguistic); Experiment 6 adds the MentalRoBERTa transformer; Experiment 7 evaluates against the self-disclosure user-level test set; Experiment 8 is a head-to-head on r/HealthAnxiety vs r/Anxiety; Experiment 9 tests domain-adversarial (DANN) training (a negative result); Experiment 10 is a clinically-grounded feature-fusion architecture surgery (a positive result). The README documents further extension analyses (calibration, per-subreddit thresholds, significance, SHAP, eRisk, robustness, fairness, external validation, hierarchical user-model).
 
 > All results below come from `scripts/run_experiments.py` against `data/processed/labeled.parquet`. Re-run any time with `python scripts/run_experiments.py`. Outputs land in `experiments/` (CSVs + JSON summary) and `docs/figures/exp*.png`.
 
@@ -251,6 +251,25 @@ MentalRoBERTa on submissions beats the Low 2020 baseline by +5.5 weighted-F1 poi
 3. **Group-DANN actively breaks** — training collapsed (val F1 → 0 by epoch 2), in-dist AUROC fell to 0.71, and it flags **18%** of neutral posts as anxious. **Mechanism:** the coarse domain label (`anxiety_primary`, `depression_primary`, …) is **collinear with the target**, so forcing invariance to "which group" is equivalent to erasing the anxiety signal. Lowering λ to 0.3 did not rescue it; the coarse-domain objective fundamentally conflicts with the task. The fine-grained 27-subreddit domain is decorrelated enough from the binary label to stay stable.
 
 **This validates the main approach:** the fine-tuned multi-task transformer is already domain-robust, so adversarial domain alignment is unnecessary (and, when the domain is collinear with the label, harmful). A rigorous test of a strong, well-motivated hypothesis returning a clean null is a methodological result in its own right.
+
+---
+
+## Experiment 10 — clinically-grounded architecture surgery (a positive result)
+
+`scripts/exp_fusion_ablation.py`, `src/models/fusion.py`. A new `FusionMultiTaskModel` adds four ablatable modifications to the multi-task encoder: **clinical feature fusion** (pooled embedding ⊕ 26 linguistic + 7 SHAI features → fusion MLP), **attention pooling**, **focal loss** (rare classes), and **activation choice**. Ablated on an author-disjoint 60k/20k split + zero-shot RMHD/ANGST transfer.
+
+| variant | anxiety F1 | health_anx F1 | suic F1 | RMHD AUROC | ANGST AUROC |
+|---|---:|---:|---:|---:|---:|
+| baseline (= multitask) | 0.845 | 0.508 | 0.444 | 0.894 | 0.778 |
+| + fusion | 0.845 | 0.540 | 0.560 | 0.905 | 0.772 |
+| + attn pool | **0.854** | 0.473 | 0.381 | 0.901 | 0.791 |
+| + focal | 0.846 | 0.489 | 0.454 | 0.900 | **0.831** |
+| **+ fusion + focal** | 0.852 | **0.559** | 0.522 | **0.931** | 0.811 |
+| + all | **0.855** | 0.481 | 0.500 | 0.910 | 0.808 |
+
+![fusion ablation](figures/fusion_ablation.png)
+
+**The surgery works.** `fusion+focal` lifts the imbalance-limited rare classes (health_anxiety 0.508→0.559, suicidality 0.444→0.522; fusion alone 0.560) **and** cross-corpus transfer (RMHD 0.894→**0.931**, which now beats the TF-IDF baseline 0.920 that previously out-transferred the transformer; ANGST 0.778→0.811, with focal-alone best at 0.831), while anxiety stays at ceiling. Fusing the **SHAI clinical-instrument features** into the encoder recovers and exceeds the lexical model's transfer advantage — a novel, low-level architecture contribution. Caveats: single-seed (no CI averaging); attention-pooling alone *hurts* rare classes (it helps only the dense anxiety class); depression dips slightly under focal. Details in [fusion_ablation.md](fusion_ablation.md).
 
 ---
 
