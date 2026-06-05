@@ -471,6 +471,8 @@ Do decoder-only LLMs beat a fine-tuned 125M encoder on the headline r/HealthAnxi
 
 **Zero-shot LLMs lose; QLoRA reaches parity at much greater cost.** Qwen2.5-7B prompted zero-shot (0.782) trails even TF-IDF and is ~13 points below the encoders — the literature-consistent result. One epoch of QLoRA on just 2,672 posts lifts the same 7B model to the top (0.917 / 0.963), **statistically tied with RoBERTa-large** (Δ within noise at n=636): fine-tuning, not prompting, closes the gap, and a 7B model only *matches* a 125–355M encoder — the small fine-tuned encoder stays the efficient choice, and beating Low 2020 still stands. (MentaLLaMA-7B zero-shot scored at chance — a prompt-format/verbalizer artifact, not a capability measure; Llama-3.1-8B is gated and deferred.) Full write-up in [docs/llm_baselines.md](docs/llm_baselines.md).
 
+**Domain-adaptive MLM (DAPT) — a null result.** Continue-pretraining `roberta-base` on 200k in-domain posts then fine-tuning on the HA task gives **no benefit**: vanilla roberta-base already matches MentalRoBERTa (0.906 ≈ 0.905) and light DAPT slightly *hurt* (0.903) — all within noise. Same lesson — once fine-tuned, pretraining provenance and scale barely move a near-ceiling task. `scripts/exp_dapt_mlm.py`, [docs/dapt_mlm.md](docs/dapt_mlm.md).
+
 ---
 
 ### Stronger encoders

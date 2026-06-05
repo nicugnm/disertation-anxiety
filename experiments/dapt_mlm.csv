@@ -1,0 +1,5 @@
+model,pretrained,weighted_f1,auroc,note,f1
+Low 2020 (SGD-L1),-,0.851,,published baseline,
+roberta-base (no DAPT),roberta-base,0.9059,0.9584,this run,0.8837
+roberta-DAPT (ours),checkpoints/roberta-dapt,0.9026,0.9545,this run,0.8789
+MentalRoBERTa (ref),mental/mental-roberta-base,0.9052,0.9575,this run,0.8785

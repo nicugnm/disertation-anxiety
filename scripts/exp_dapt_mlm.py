@@ -80,17 +80,13 @@ def pretrain(base: str, out_dir: str, max_docs: int, block_size: int, epochs: fl
     ds = ds.map(tok_fn, batched=True, remove_columns=["text"], desc="tokenize")
     collator = DataCollatorForLanguageModeling(tokenizer=tok, mlm=True, mlm_probability=0.15)
 
-    ta_kwargs = dict(
-        output_dir=out_dir, overwrite_output_dir=True,
+    args = TrainingArguments(
+        output_dir=out_dir,
         per_device_train_batch_size=batch_size, num_train_epochs=epochs,
         learning_rate=5e-5, weight_decay=0.01, warmup_ratio=0.06,
         fp16=torch.cuda.is_available(), save_strategy="no", report_to=[], logging_steps=50,
         seed=SEED,
     )
-    try:
-        args = TrainingArguments(**ta_kwargs)
-    except TypeError:
-        args = TrainingArguments(**ta_kwargs)  # no eval here, nothing to rename
     trainer_kwargs = dict(model=model, args=args, train_dataset=ds, data_collator=collator)
     try:
         trainer = Trainer(processing_class=tok, **trainer_kwargs)
@@ -166,7 +162,18 @@ def evaluate(base: str, ckpt: str, test_size: float) -> None:
     ]
     for r in rows:
         md.append("| " + " | ".join(str(r.get(c, "")) for c in cols) + " |")
-    md += ["", "![dapt mlm](figures/dapt_mlm.png)"]
+    md += [
+        "", "![dapt mlm](figures/dapt_mlm.png)", "",
+        "## Interpretation",
+        "",
+        "Whether DAPT helps depends on whether the un-adapted base already matches the "
+        "domain-pretrained encoder. If `roberta-base` ≈ MentalRoBERTa after fine-tuning, there is "
+        "no domain gap for DAPT to close, and light in-domain MLM (a few hundred k docs, 1 epoch) "
+        "can even add noise. This mirrors the generative-LLM finding: once fine-tuned on the task, "
+        "the model's pretraining provenance (and scale) barely moves a near-ceiling result — "
+        "fine-tuning, not the pretraining corpus, is what matters. Heavier DAPT (full corpus, more "
+        "epochs) or a harder downstream task is where in-domain pretraining usually pays off.",
+    ]
     DOC.write_text("\n".join(md), encoding="utf-8")
     print("\n", out[cols].to_string(index=False))
     print(f"\nWrote {OUTCSV}, {DOC}, {FIG}")

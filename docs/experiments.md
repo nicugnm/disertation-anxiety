@@ -322,6 +322,18 @@ The learned attention aggregator does **not** beat naive mean-pooling (mean wins
 
 **Zero-shot LLMs lose; QLoRA reaches parity at much greater cost.** Qwen2.5-7B prompted zero-shot (0.782) trails even TF-IDF (0.886) and is ~13 points below the encoders — the literature-consistent result that fine-tuned encoders beat prompted LLMs on short-text mental-health classification. After **one epoch** of QLoRA on only 2,672 posts, the same 7B model jumps to the top of the table (0.917 / 0.963), **statistically tied with RoBERTa-large** (Δ within noise at n=636). So fine-tuning — not prompting — closes the gap, and a 7B model only *matches* a 125–355M encoder: the small fine-tuned encoder remains the parameter-efficient choice, and the headline contribution (beating Low 2020) is not unseated. **MentaLLaMA-7B zero-shot (AUROC 0.45 ≈ chance) is a verbalizer/prompt-format artifact, not a capability measure** — it is tuned for long-form IMHI answers and lacks a chat template (needs `[INST]…[/INST]` for a fair probe). Llama-3.1-8B (zero-shot + QLoRA) is gated and deferred pending HF access. Details in [llm_baselines.md](llm_baselines.md).
 
+### Phase 2 (b1) — domain-adaptive MLM pretraining (a null result)
+
+`scripts/exp_dapt_mlm.py`. Continue masked-LM pretraining of `roberta-base` on 200k in-domain posts (disclosure-test authors excluded), then fine-tune on the same HA task. Does in-domain MLM close the gap to MentalRoBERTa?
+
+| encoder | weighted-F1 | AUROC |
+|---|---:|---:|
+| roberta-base (no DAPT) | **0.9059** | 0.9584 |
+| roberta-DAPT (ours) | 0.9026 | 0.9545 |
+| MentalRoBERTa | 0.9052 | 0.9575 |
+
+**No benefit — and instructive.** Vanilla `roberta-base` already *matches* MentalRoBERTa (no domain gap to close on this fine-tuned task), and light DAPT slightly *hurt*; all three are within noise. Same lesson as the LLM result: once fine-tuned, pretraining provenance and model scale barely move a near-ceiling task — **fine-tuning, not the pretraining corpus, is what matters.** Caveat: time-boxed DAPT (200k docs, 1 epoch); a heavier run or a harder downstream task is where in-domain pretraining usually pays off. Details in [dapt_mlm.md](dapt_mlm.md).
+
 ---
 
 ## What we used (concrete inventory)
