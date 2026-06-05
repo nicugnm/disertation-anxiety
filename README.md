@@ -414,6 +414,29 @@ Connects the model to the clinical instrument's structure (absent from prior wor
 
 ---
 
+### Experiment 10 — clinically-grounded architecture surgery (novel)
+
+A new `FusionMultiTaskModel` (`src/models/fusion.py`) performs low-level surgery on the multi-task encoder: **(1) clinical feature fusion** — concatenate the pooled MentalRoBERTa embedding with the 26 linguistic + 7 SHAI features (z-normalised, through a fusion MLP); **(2) learned attention pooling**; **(3) focal loss** for rare classes; **(4) activation ablation**. Ablated on an author-disjoint 60k/20k split + zero-shot RMHD/ANGST transfer. `scripts/exp_fusion_ablation.py`.
+
+| variant | anxiety F1 | health_anx F1 | suic F1 | RMHD AUROC | ANGST AUROC |
+|---|---:|---:|---:|---:|---:|
+| baseline (= plain multitask) | 0.845 | 0.508 | 0.444 | 0.894 | 0.778 |
+| + fusion | 0.845 | 0.540 | 0.560 | 0.905 | 0.772 |
+| + attn pool | **0.854** | 0.473 | 0.381 | 0.901 | 0.791 |
+| + focal | 0.846 | 0.489 | 0.454 | 0.900 | **0.831** |
+| **+ fusion + focal** | 0.852 | **0.559** | 0.522 | **0.931** | 0.811 |
+| + all | **0.855** | 0.481 | 0.500 | 0.910 | 0.808 |
+
+![fusion ablation](docs/figures/fusion_ablation.png)
+
+**The surgery works — `fusion+focal` improves the two dimensions that mattered, with anxiety held at ceiling:**
+1. **Rare-class F1 up** — health_anxiety **0.508 → 0.559 (+0.051)**, suicidality **0.444 → 0.522** (fusion alone 0.560) — focal + fusion target exactly the imbalance-limited classes.
+2. **Cross-corpus transfer up** — RMHD zero-shot **0.894 → 0.931 (+0.037)**, which now **beats the TF-IDF baseline (0.920)** that previously *out-transferred* the transformer; ANGST expert-label transfer **0.778 → 0.831** (focal) / 0.811 (fusion+focal). Fusing the stable clinical/lexical features into the encoder **recovers and exceeds the lexical model's transfer advantage** — directly closing the gap documented in the external-validation section above.
+
+To our knowledge no prior work fuses **SHAI clinical-instrument features into a transformer** for health-anxiety, and `fusion+focal` is the first model here to beat TF-IDF on external transfer *while keeping* the transformer's in-domain power — a genuine low-level architecture contribution. **Honest caveats:** single-seed (no CI averaging yet); **attention-pooling alone** lifts the dense anxiety class (0.854) but *hurts* rare classes (health_anx 0.473, suic 0.381); depression F1 dips slightly under focal. Full table in [docs/fusion_ablation.md](docs/fusion_ablation.md).
+
+---
+
 ### Stronger encoders
 
 Does scaling the encoder beat the domain-pretrained MentalRoBERTa on the r/HealthAnxiety-vs-r/Anxiety task (Exp 8 setup, submissions-only, author-disjoint)? `scripts/exp_stronger_models.py`.

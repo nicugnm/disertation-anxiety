@@ -78,11 +78,12 @@ def main() -> None:
           f"disclosure eval users: {disc['author_hash'].nunique():,}")
 
     rows: list[dict] = []
-    for agg in [a.strip() for a in args.aggregators.split(",") if a.strip()]:
+    aggs = [a.strip() for a in args.aggregators.split(",") if a.strip()]
+    for ai, agg in enumerate(aggs, 1):
         cfg = load_model_config("configs/models/hier_user.yaml")
         cfg.extra.setdefault("user_model", {})["aggregator"] = agg
         cfg.extra.setdefault("train", {})["num_train_epochs"] = args.epochs
-        print(f"\n=== training hierarchical ({agg}) ===")
+        print(f"\n=== [{ai}/{len(aggs)}] training hierarchical ({agg}) ===", flush=True)
         model = build_model(cfg).fit(df, val=None)
         _user_eval(model, disc, rows, agg)
         pd.DataFrame(rows).to_csv(OUTCSV, index=False)

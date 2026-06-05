@@ -86,12 +86,12 @@ def main() -> None:
     ti = TARGETS.index("anxiety")
 
     rows: list[dict] = []
-    for name in chosen:
+    for vi, name in enumerate(chosen, 1):
         cfg = load_model_config("configs/models/fusion_multitask.yaml")
         for k, v in VARIANTS[name].items():
             cfg.extra[k] = v
         cfg.extra.setdefault("train", {})["num_train_epochs"] = args.epochs
-        print(f"\n=== training variant: {name} ({VARIANTS[name]}) ===")
+        print(f"\n=== [{vi}/{len(chosen)}] training variant: {name} ({VARIANTS[name]}) ===", flush=True)
         model = build_model(cfg).fit(train, val=None)
         proba = np.asarray(model.predict_proba(test))
         row = {"variant": name}
