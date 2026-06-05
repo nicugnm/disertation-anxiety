@@ -455,6 +455,24 @@ Does a **learned attention aggregator** over a user's post stream beat naive mea
 
 ---
 
+### Experiment 12 — generative-LLM baselines (Phase 2)
+
+Do decoder-only LLMs beat a fine-tuned 125M encoder on the headline r/HealthAnxiety-vs-r/Anxiety task? `HfCausalLmModel` (`src/models/llm_causal.py`): yes/no verbalizer over next-token logits; QLoRA = 4-bit NF4 + LoRA. Same submissions-only, author-disjoint split (n=636 test); a TF-IDF anchor re-scored on the exact rows (0.8855 ≈ 0.886 reference) confirms apples-to-apples. `scripts/exp_llm_baselines.py`.
+
+| model | weighted-F1 | AUROC |
+|---|---:|---:|
+| TF-IDF + LogReg | 0.886 | 0.944 |
+| MentalRoBERTa (125M, fine-tuned) | 0.906 | 0.955 |
+| RoBERTa-large (355M, fine-tuned) | 0.916 | 0.958 |
+| Qwen2.5-7B **zero-shot** | 0.782 | 0.816 |
+| **Qwen2.5-7B QLoRA** (1 epoch) | **0.917** | **0.963** |
+
+![generative LLM baselines](docs/figures/llm_baselines.png)
+
+**Zero-shot LLMs lose; QLoRA reaches parity at much greater cost.** Qwen2.5-7B prompted zero-shot (0.782) trails even TF-IDF and is ~13 points below the encoders — the literature-consistent result. One epoch of QLoRA on just 2,672 posts lifts the same 7B model to the top (0.917 / 0.963), **statistically tied with RoBERTa-large** (Δ within noise at n=636): fine-tuning, not prompting, closes the gap, and a 7B model only *matches* a 125–355M encoder — the small fine-tuned encoder stays the efficient choice, and beating Low 2020 still stands. (MentaLLaMA-7B zero-shot scored at chance — a prompt-format/verbalizer artifact, not a capability measure; Llama-3.1-8B is gated and deferred.) Full write-up in [docs/llm_baselines.md](docs/llm_baselines.md).
+
+---
+
 ### Stronger encoders
 
 Does scaling the encoder beat the domain-pretrained MentalRoBERTa on the r/HealthAnxiety-vs-r/Anxiety task (Exp 8 setup, submissions-only, author-disjoint)? `scripts/exp_stronger_models.py`.

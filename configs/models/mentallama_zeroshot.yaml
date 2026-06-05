@@ -1,0 +1,15 @@
+name: mentallama_7b_zeroshot
+model_type: llm_causal
+text_field: clean_text
+target: ha            # r/HealthAnxiety (1) vs r/Anxiety (0) head-to-head
+
+# Yang et al. 2024 — the published mental-health domain LLM (LLaMA2-7B-chat base)
+pretrained: klyang/MentaLLaMA-chat-7B
+load_in_4bit: true
+batch_size: 8
+char_cap: 1600
+tokenizer:
+  max_length: 1024
+
+lora:
+  enabled: false

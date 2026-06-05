@@ -113,7 +113,7 @@ class ModelConfig(BaseModel):
     name: str
     model_type: Literal[
         "tfidf", "xgboost", "transformer", "multitask_transformer", "dann_multitask",
-        "fusion_multitask", "hier_user", "llm_zero_shot"
+        "fusion_multitask", "hier_user", "llm_zero_shot", "llm_causal"
     ]
     text_field: str = "clean_text"
     target: str | None = None

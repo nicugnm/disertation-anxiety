@@ -1,0 +1,15 @@
+name: llama31_8b_zeroshot
+model_type: llm_causal
+text_field: clean_text
+target: ha            # r/HealthAnxiety (1) vs r/Anxiety (0) head-to-head
+
+pretrained: meta-llama/Llama-3.1-8B-Instruct
+load_in_4bit: true    # NF4 via bitsandbytes; fits in 24 GB
+batch_size: 8
+char_cap: 1600
+tokenizer:
+  max_length: 1024
+
+# zero-shot: no LoRA, no training (fit is a no-op)
+lora:
+  enabled: false

@@ -38,4 +38,8 @@ def build_model(config: ModelConfig) -> BaseModel:
         from src.models.llm_zero_shot import LlmZeroShotModel
 
         return LlmZeroShotModel(config)
+    if config.model_type == "llm_causal":
+        from src.models.llm_causal import HfCausalLmModel
+
+        return HfCausalLmModel(config)
     raise ValueError(f"Unknown model_type: {config.model_type}")

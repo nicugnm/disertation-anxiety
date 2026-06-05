@@ -304,6 +304,26 @@ The learned attention aggregator does **not** beat naive mean-pooling (mean wins
 
 ---
 
+## Experiment 12 — generative-LLM baselines (Phase 2)
+
+`scripts/exp_llm_baselines.py`, `src/models/llm_causal.py`. Do decoder-only LLMs beat a fine-tuned 125M encoder on the headline r/HealthAnxiety-vs-r/Anxiety task? Same submissions-only, author-disjoint split (n=636 test); LLMs scored with a yes/no verbalizer over next-token logits, QLoRA = 4-bit NF4 + LoRA (1 epoch on 2,672 posts). A TF-IDF anchor re-scored on the exact eval rows (0.8855, matching the 0.886 reference) confirms an apples-to-apples comparison.
+
+| model | weighted-F1 | AUROC |
+|---|---:|---:|
+| Low 2020 (SGD-L1) | 0.851 | — |
+| TF-IDF + LogReg | 0.886 | 0.944 |
+| MentalRoBERTa (125M, fine-tuned) | 0.906 | 0.955 |
+| RoBERTa-large (355M, fine-tuned) | 0.916 | 0.958 |
+| Qwen2.5-7B **zero-shot** | 0.782 | 0.816 |
+| MentaLLaMA-7B zero-shot | 0.241 | 0.451 |
+| **Qwen2.5-7B QLoRA** | **0.917** | **0.963** |
+
+![llm baselines](figures/llm_baselines.png)
+
+**Zero-shot LLMs lose; QLoRA reaches parity at much greater cost.** Qwen2.5-7B prompted zero-shot (0.782) trails even TF-IDF (0.886) and is ~13 points below the encoders — the literature-consistent result that fine-tuned encoders beat prompted LLMs on short-text mental-health classification. After **one epoch** of QLoRA on only 2,672 posts, the same 7B model jumps to the top of the table (0.917 / 0.963), **statistically tied with RoBERTa-large** (Δ within noise at n=636). So fine-tuning — not prompting — closes the gap, and a 7B model only *matches* a 125–355M encoder: the small fine-tuned encoder remains the parameter-efficient choice, and the headline contribution (beating Low 2020) is not unseated. **MentaLLaMA-7B zero-shot (AUROC 0.45 ≈ chance) is a verbalizer/prompt-format artifact, not a capability measure** — it is tuned for long-form IMHI answers and lacks a chat template (needs `[INST]…[/INST]` for a fair probe). Llama-3.1-8B (zero-shot + QLoRA) is gated and deferred pending HF access. Details in [llm_baselines.md](llm_baselines.md).
+
+---
+
 ## What we used (concrete inventory)
 
 ### Models
