@@ -1,0 +1,7 @@
+aggregator,target,n_users,n_pos,user_auroc,user_f1
+attention,anxiety,3516,258,0.7061,0.2488
+attention,health_anxiety,3516,141,0.7244,0.1941
+attention,depression,3516,513,0.5707,0.2815
+mean,anxiety,3516,258,0.7447,0.2732
+mean,health_anxiety,3516,141,0.763,0.2191
+mean,depression,3516,513,0.6138,0.2933

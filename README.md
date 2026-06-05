@@ -437,6 +437,22 @@ To our knowledge no prior work fuses **SHAI clinical-instrument features into a 
 
 ---
 
+### Experiment 11 — hierarchical user-model (a negative result)
+
+Does a **learned attention aggregator** over a user's post stream beat naive mean-pooling at the user level — the one place cheap TF-IDF still competes (~0.74 user-AUROC)? `HierUserModel` (`src/models/hier.py`): frozen MentalRoBERTa post-encoder → per-post embeddings → aggregator (attention | mean) → user head; trained on author-grouped corpus posts (weak user labels), evaluated user-level on the self-disclosure test set (disclosure posts masked). `scripts/exp_hier_user.py`.
+
+| target | attention AUROC | mean AUROC | TF-IDF ref |
+|---|---:|---:|---:|
+| anxiety | 0.706 | **0.745** | ~0.74 |
+| health_anxiety | 0.724 | **0.763** | — |
+| depression | 0.571 | **0.614** | — |
+
+![hierarchical user model](docs/figures/hier_user.png)
+
+**The learned attention aggregator does *not* beat mean-pooling** — mean wins on all three targets, and the mean-aggregator hierarchical model only **ties** the TF-IDF baseline (anxiety 0.745 ≈ 0.74; health_anxiety 0.763 marginally above). The user-level bottleneck is the **noisy disclosure label + subreddit-matched hard-negative controls**, not the aggregation mechanism — consistent with the field (Harrigian: proxy-label user models transfer poorly). A clean null. **Caveats:** trained on weak any-post-positive user labels (≠ the disclosure eval label), frozen encoder, a single-query attention head — a fine-tuned encoder or disclosure-style training labels might help, but the honest finding is that mean-pooling MentalRoBERTa embeddings is already as good as a learned aggregator here. Full table in [docs/hier_user.md](docs/hier_user.md).
+
+---
+
 ### Stronger encoders
 
 Does scaling the encoder beat the domain-pretrained MentalRoBERTa on the r/HealthAnxiety-vs-r/Anxiety task (Exp 8 setup, submissions-only, author-disjoint)? `scripts/exp_stronger_models.py`.

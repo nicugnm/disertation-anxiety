@@ -1,6 +1,6 @@
 # Experiments — what we achieved, what we used, what we found
 
-Ten classification/evaluation studies, **all run on the current 743,879-post / 38-subreddit corpus** — no LLM API calls, no human annotators required. Experiments 1–5 compare weak-label classifiers (TF-IDF + LogReg, XGBoost-linguistic); Experiment 6 adds the MentalRoBERTa transformer; Experiment 7 evaluates against the self-disclosure user-level test set; Experiment 8 is a head-to-head on r/HealthAnxiety vs r/Anxiety; Experiment 9 tests domain-adversarial (DANN) training (a negative result); Experiment 10 is a clinically-grounded feature-fusion architecture surgery (a positive result). The README documents further extension analyses (calibration, per-subreddit thresholds, significance, SHAP, eRisk, robustness, fairness, external validation, hierarchical user-model).
+Eleven classification/evaluation studies, **all run on the current 743,879-post / 38-subreddit corpus** — no LLM API calls, no human annotators required. Experiments 1–5 compare weak-label classifiers (TF-IDF + LogReg, XGBoost-linguistic); Experiment 6 adds the MentalRoBERTa transformer; Experiment 7 evaluates against the self-disclosure user-level test set; Experiment 8 is a head-to-head on r/HealthAnxiety vs r/Anxiety; Experiment 9 tests domain-adversarial (DANN) training (a negative result); Experiment 10 is a clinically-grounded feature-fusion architecture surgery (a positive result); Experiment 11 tests a hierarchical user-level model (a negative result). The README documents further extension analyses (calibration, per-subreddit thresholds, significance, SHAP, eRisk, robustness, fairness, external validation).
 
 > All results below come from `scripts/run_experiments.py` against `data/processed/labeled.parquet`. Re-run any time with `python scripts/run_experiments.py`. Outputs land in `experiments/` (CSVs + JSON summary) and `docs/figures/exp*.png`.
 
@@ -270,6 +270,22 @@ MentalRoBERTa on submissions beats the Low 2020 baseline by +5.5 weighted-F1 poi
 ![fusion ablation](figures/fusion_ablation.png)
 
 **The surgery works.** `fusion+focal` lifts the imbalance-limited rare classes (health_anxiety 0.508→0.559, suicidality 0.444→0.522; fusion alone 0.560) **and** cross-corpus transfer (RMHD 0.894→**0.931**, which now beats the TF-IDF baseline 0.920 that previously out-transferred the transformer; ANGST 0.778→0.811, with focal-alone best at 0.831), while anxiety stays at ceiling. Fusing the **SHAI clinical-instrument features** into the encoder recovers and exceeds the lexical model's transfer advantage — a novel, low-level architecture contribution. Caveats: single-seed (no CI averaging); attention-pooling alone *hurts* rare classes (it helps only the dense anxiety class); depression dips slightly under focal. Details in [fusion_ablation.md](fusion_ablation.md).
+
+---
+
+## Experiment 11 — hierarchical user-level model (a negative result)
+
+`scripts/exp_hier_user.py`, `src/models/hier.py`. A frozen MentalRoBERTa post-encoder → learned aggregation over a user's chronological posts (attention vs mean) → user head, evaluated at the USER level on the self-disclosure test set (disclosure posts masked). Reference: TF-IDF mean-pool ≈ 0.74 user-AUROC.
+
+| target | attention AUROC | mean AUROC |
+|---|---:|---:|
+| anxiety | 0.706 | 0.745 |
+| health_anxiety | 0.724 | 0.763 |
+| depression | 0.571 | 0.614 |
+
+![hierarchical user model](figures/hier_user.png)
+
+The learned attention aggregator does **not** beat naive mean-pooling (mean wins on all three targets), and the mean-aggregator hierarchical model only **ties** TF-IDF (~0.74; health_anxiety 0.763 marginally above). The user-level bottleneck is the **noisy disclosure proxy label + subreddit-matched hard-negative controls**, not the aggregation mechanism — consistent with Harrigian et al. on proxy-label user models. A clean null. Caveats: weak any-post-positive training labels (≠ the disclosure eval label), frozen encoder, single-query attention head.
 
 ---
 
