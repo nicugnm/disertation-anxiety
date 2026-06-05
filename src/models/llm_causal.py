@@ -69,6 +69,10 @@ class HfCausalLmModel(BaseModel):
         self._char_cap = int(e.get("char_cap", 1600))
         self._max_length = int(e.get("tokenizer", {}).get("max_length", 1024))
         self._batch_size = int(e.get("batch_size", 8))
+        # "auto" = chat_template if present else plain; "llama2" = [INST]<<SYS>> format
+        # (for LLaMA-2-chat models like MentaLLaMA that ship without a chat_template);
+        # "plain" = system + prompt + "Answer:".
+        self._prompt_style = e.get("prompt_style", "auto")
         # 4-bit only makes sense on CUDA; disabled automatically on CPU (tests).
         self._want_4bit = bool(e.get("load_in_4bit", True))
         lora = e.get("lora", {}) or {}
@@ -168,8 +172,10 @@ class HfCausalLmModel(BaseModel):
         tok = self._tok
         desc = TARGET_DESCRIPTIONS.get(self.target, self.target)
         user = PROMPT_TEMPLATE.format(target_description=desc, post=str(text)[: self._char_cap])
-        tmpl = getattr(tok, "chat_template", None)
-        if tmpl:
+        if self._prompt_style == "llama2":
+            # LLaMA-2-chat instruction format (MentaLLaMA ships without a chat_template)
+            return f"[INST] <<SYS>>\n{SYSTEM_PROMPT}\n<</SYS>>\n\n{user} [/INST]"
+        if self._prompt_style != "plain" and getattr(tok, "chat_template", None):
             return tok.apply_chat_template(
                 [{"role": "system", "content": SYSTEM_PROMPT},
                  {"role": "user", "content": user}],

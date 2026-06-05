@@ -116,6 +116,14 @@ def test_format_fallback_without_chat_template():
     assert TARGET_DESCRIPTIONS["ha"][:20] in out   # target description embedded
 
 
+def test_format_llama2_style():
+    m = HfCausalLmModel(_cfg(target="ha", extra={"prompt_style": "llama2"}))
+    m._tok = _FakeTok()                       # has no chat_template
+    out = m._format("worried about my heart")
+    assert out.startswith("[INST]") and "<<SYS>>" in out and out.rstrip().endswith("[/INST]")
+    assert "worried about my heart" in out
+
+
 def test_format_truncates_to_char_cap():
     m = HfCausalLmModel(_cfg(target="anxiety", extra={"char_cap": 50}))
     m._tok = _FakeTok()

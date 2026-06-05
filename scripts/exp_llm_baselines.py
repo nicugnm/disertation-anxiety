@@ -71,6 +71,7 @@ LLM_VARIANTS = {
     "mentallama-zeroshot": {  # Yang 2024 domain LLM (LLaMA2-7B-chat base)
         "pretrained": "klyang/MentaLLaMA-chat-7B",
         "lora": {"enabled": False}, "load_in_4bit": True,
+        "prompt_style": "llama2",   # LLaMA-2-chat format (no chat_template shipped)
     },
     "qwen-zeroshot": {        # strong open general instruct model
         "pretrained": "Qwen/Qwen2.5-7B-Instruct",
@@ -93,6 +94,21 @@ LLM_VARIANTS = {
 
 # Llama-3.1 is gated; omit from the default run until access is granted.
 DEFAULT_MODELS = "mentallama-zeroshot,qwen-zeroshot,qwen-qlora"
+
+
+def _merge_with_existing(rows: list[dict]) -> list[dict]:
+    """Merge new rows into any existing CSV by model name, so a partial --models
+    re-run updates only those rows and preserves the rest."""
+    if not OUTCSV.exists():
+        return rows
+    try:
+        prior = pd.read_csv(OUTCSV).to_dict("records")
+    except Exception:  # noqa: BLE001
+        return rows
+    by_model = {r["model"]: r for r in prior}
+    for r in rows:
+        by_model[r["model"]] = r
+    return list(by_model.values())
 
 
 def _subsample(df: pd.DataFrame, n: int) -> pd.DataFrame:
@@ -190,8 +206,9 @@ def main() -> None:
             rows.append({"model": name, "kind": "llm", "weighted_f1": None, "auroc": None,
                          "f1": None, "note": f"FAILED: {str(ex)[:90]}"})
             print(f"  {name} FAILED: {ex}")
-        pd.DataFrame(rows).to_csv(OUTCSV, index=False)
+        pd.DataFrame(_merge_with_existing(rows)).to_csv(OUTCSV, index=False)
 
+    rows = _merge_with_existing(rows)   # preserve rows from prior partial runs
     out = pd.DataFrame(rows)
     OUTCSV.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(OUTCSV, index=False)

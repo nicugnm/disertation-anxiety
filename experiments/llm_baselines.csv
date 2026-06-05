@@ -4,6 +4,6 @@ TF-IDF + LogReg,linear,0.886,0.944,Exp 8 (full test),
 "MentalRoBERTa (125M, fine-tuned)",encoder,0.906,0.955,Exp 8 (full test),
 "RoBERTa-large (355M, fine-tuned)",encoder,0.916,0.958,Idea 12 (full test),
 "TF-IDF (this eval subsample, n=636)",linear,0.8855,0.9444,apples-to-apples anchor,0.8588
-mentallama-zeroshot,llm,0.2408,0.4513,eval subsample n=636,0.5718
+mentallama-zeroshot,llm,0.228,0.4718,eval subsample n=636,0.5708
 qwen-zeroshot,llm,0.7817,0.8156,eval subsample n=636,0.7426
 qwen-qlora,llm,0.9169,0.963,eval subsample n=636,0.8894
