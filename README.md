@@ -435,6 +435,8 @@ A new `FusionMultiTaskModel` (`src/models/fusion.py`) performs low-level surgery
 
 To our knowledge no prior work fuses **SHAI clinical-instrument features into a transformer** for health-anxiety, and `fusion+focal` is the first model here to beat TF-IDF on external transfer *while keeping* the transformer's in-domain power — a genuine low-level architecture contribution. **Honest caveats:** single-seed (no CI averaging yet); **attention-pooling alone** lifts the dense anxiety class (0.854) but *hurts* rare classes (health_anx 0.473, suic 0.381); depression F1 dips slightly under focal. Full table in [docs/fusion_ablation.md](docs/fusion_ablation.md).
 
+**Calibration of the winning model (Phase 1C):** focal loss makes `fusion+focal` *under*-confident (it down-weights confident examples), but post-hoc **temperature scaling** (T ≈ 0.47–0.62) restores excellent calibration — anxiety ECE **0.020 → 0.006**, and the rarer classes to **≤ 0.002** — and **per-subreddit thresholds** lift anxiety macro-F1 **0.852 → 0.888**. Both calibration extensions transfer cleanly to the new architecture ([docs/fusion_calibration.md](docs/fusion_calibration.md)).
+
 ---
 
 ### Experiment 11 — hierarchical user-model (a negative result)

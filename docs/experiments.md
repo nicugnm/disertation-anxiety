@@ -271,6 +271,21 @@ MentalRoBERTa on submissions beats the Low 2020 baseline by +5.5 weighted-F1 poi
 
 **The surgery works.** `fusion+focal` lifts the imbalance-limited rare classes (health_anxiety 0.508→0.559, suicidality 0.444→0.522; fusion alone 0.560) **and** cross-corpus transfer (RMHD 0.894→**0.931**, which now beats the TF-IDF baseline 0.920 that previously out-transferred the transformer; ANGST 0.778→0.811, with focal-alone best at 0.831), while anxiety stays at ceiling. Fusing the **SHAI clinical-instrument features** into the encoder recovers and exceeds the lexical model's transfer advantage — a novel, low-level architecture contribution. Caveats: single-seed (no CI averaging); attention-pooling alone *hurts* rare classes (it helps only the dense anxiety class); depression dips slightly under focal. Details in [fusion_ablation.md](fusion_ablation.md).
 
+### Phase 1C — recalibrating the winning model
+
+`scripts/exp_fusion_calibration.py`. The two calibration extensions (Experiments 2/3 in the original menu — temperature scaling + per-subreddit thresholds) were re-run on `fusion+focal` to confirm the calibration story survives the architecture change.
+
+| target | temperature | ECE before | ECE after |
+|---|---:|---:|---:|
+| anxiety | 0.618 | 0.0202 | **0.0062** |
+| health_anxiety | 0.474 | 0.0148 | **0.0010** |
+| depression | 0.555 | 0.0182 | **0.0016** |
+| suicidality | 0.513 | 0.0058 | **0.0003** |
+
+![fusion calibration](figures/fusion_calibration.png)
+
+**Focal loss trades calibration for ranking — and temperature scaling buys it back.** Every learned temperature is **< 1** (0.47–0.62), i.e. the model is *under*-confident: focal loss down-weights confident examples during training, so the raw probabilities are deliberately conservative. Post-hoc temperature scaling sharpens them and cuts ECE by 69–95% (anxiety 0.020→0.006; rarer classes to ≤0.002 — essentially perfectly calibrated). Per-subreddit thresholds still help the new model too: anxiety macro-F1 **0.852 → 0.888**. Both calibration tools transfer cleanly to the fused architecture. Details in [fusion_calibration.md](fusion_calibration.md).
+
 ---
 
 ## Experiment 11 — hierarchical user-level model (a negative result)

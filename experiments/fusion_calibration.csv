@@ -1,0 +1,5 @@
+target,temperature,ece_before,ece_after
+anxiety,0.618,0.0202,0.0062
+health_anxiety,0.474,0.0148,0.001
+depression,0.555,0.0182,0.0016
+suicidality,0.513,0.0058,0.0003
