@@ -71,3 +71,8 @@ secrets.yaml
 .ruff_cache/
 htmlcov/
 .coverage
+
+# Presentation & speaker notes — kept LOCAL only, never pushed (per request).
+/presentation/
+/scripts/build_presentation.py
+/scripts/build_speaker_notes.py
