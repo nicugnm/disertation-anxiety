@@ -30,6 +30,16 @@ from src.utils.logging import get_logger
 
 log = get_logger(__name__)
 
+# Linguistic features whose values are computed from the SAME lexicons that build
+# the weak labels (src/labeling/weak.py). A model fusing these partly reads a
+# transformed copy of its own label -> dropping them isolates the encoder gain
+# from the label's vocabulary (de-biasing check for the weak-supervision critique).
+LABEL_LEXICON_FEATS = {
+    "f_anx_term_rate", "f_anx_phrase_count",
+    "f_health_anx_term_rate", "f_health_anx_phrase_count", "f_reassurance_count",
+    "f_dep_term_rate", "f_suic_term_rate",
+}
+
 
 # --------------------------------------------------------------------------- #
 # Reusable nn pieces (module-level so they are unit-testable without an encoder)
@@ -110,6 +120,12 @@ class FusionMultiTaskModel(MultiTaskTransformer):
         self._fusion = bool(fz.get("enabled", False))
         self._fusion_dropout = float(fz.get("dropout", 0.1))
         self._use_layernorm = bool(fz.get("use_layernorm", True))
+        # which clinical features to fuse:
+        #   "all"              -> 26 linguistic + 7 SHAI (default)
+        #   "no_label_lexicon" -> drop the 7 label-lexicon term/phrase rates + all SHAI
+        #                         (SHAI vocabulary echoes the health-anxiety label)
+        #   "style_only"       -> also drop f_body_part_rate: no clinical vocabulary at all
+        self._feature_set = str(fz.get("feature_set", "all"))
         self._attn_pool = bool(ap.get("enabled", False))
         self._attn_dim = int(ap.get("attn_dim", 128))
         self._focal = bool(fc.get("enabled", False))
@@ -137,7 +153,13 @@ class FusionMultiTaskModel(MultiTaskTransformer):
         ).rename(columns={d: f"shai_{d}" for d in dims}).reset_index(drop=True)
         out = pd.concat([ling, shai], axis=1)
         if self._feature_cols is None:
-            self._feature_cols = list(out.columns)
+            cols = list(out.columns)
+            if self._feature_set in ("no_label_lexicon", "style_only"):
+                drop = set(LABEL_LEXICON_FEATS) | {c for c in cols if c.startswith("shai_")}
+                if self._feature_set == "style_only":
+                    drop |= {"f_body_part_rate"}
+                cols = [c for c in cols if c not in drop]
+            self._feature_cols = cols
         return out.reindex(columns=self._feature_cols, fill_value=0.0)
 
     def _fit_norm(self, feats: pd.DataFrame) -> None:
@@ -347,6 +369,7 @@ class FusionMultiTaskModel(MultiTaskTransformer):
     def _meta(self) -> dict:
         return {
             "fusion": self._fusion, "fusion_dropout": self._fusion_dropout, "use_layernorm": self._use_layernorm,
+            "feature_set": self._feature_set,
             "attn_pool": self._attn_pool, "attn_dim": self._attn_dim,
             "focal": self._focal, "gamma": self._gamma, "class_balanced": self._class_balanced, "beta": self._beta,
             "activation": self._activation,
@@ -372,6 +395,7 @@ class FusionMultiTaskModel(MultiTaskTransformer):
         p = Path(path)
         meta = json.loads((p / "fusion_meta.json").read_text())
         self._fusion = meta["fusion"]; self._fusion_dropout = meta["fusion_dropout"]; self._use_layernorm = meta["use_layernorm"]
+        self._feature_set = meta.get("feature_set", "all")
         self._attn_pool = meta["attn_pool"]; self._attn_dim = meta["attn_dim"]
         self._focal = meta["focal"]; self._gamma = meta["gamma"]; self._class_balanced = meta["class_balanced"]; self._beta = meta["beta"]
         self._activation = meta["activation"]

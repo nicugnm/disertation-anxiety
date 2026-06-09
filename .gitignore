@@ -76,3 +76,6 @@ htmlcov/
 /presentation/
 /scripts/build_presentation.py
 /scripts/build_speaker_notes.py
+
+# Thesis (LaTeX) — kept LOCAL only, never pushed (per request).
+/thesis_latex/

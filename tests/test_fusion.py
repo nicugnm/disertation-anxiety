@@ -97,6 +97,32 @@ def test_raw_feats_33_columns_and_normalization():
     assert np.allclose(normed[:, nonconstant].mean(axis=0), 0, atol=1e-5)
 
 
+def test_feature_set_no_label_lexicon_drops_label_vocab():
+    m = FusionMultiTaskModel(_cfg(extra={"fusion": {"enabled": True, "feature_set": "no_label_lexicon"}}))
+    df = pd.DataFrame({"clean_text": [
+        "so anxious and worried about cancer, googling my symptoms",
+        "made a nice dinner and read a book today",
+    ]})
+    cols = set(m._raw_feats(df).columns)
+    # features whose vocabulary builds the weak labels must be gone
+    for c in ["f_anx_term_rate", "f_anx_phrase_count", "f_health_anx_term_rate",
+              "f_health_anx_phrase_count", "f_reassurance_count", "f_dep_term_rate", "f_suic_term_rate"]:
+        assert c not in cols
+    assert not any(c.startswith("shai_") for c in cols)     # SHAI echoes the HA label
+    # style/structure features must remain
+    for c in ["f_first_sing_rate", "f_sent_compound", "f_n_tokens", "f_flesch", "f_body_part_rate"]:
+        assert c in cols
+
+
+def test_feature_set_style_only_drops_all_clinical_vocab():
+    m = FusionMultiTaskModel(_cfg(extra={"fusion": {"enabled": True, "feature_set": "style_only"}}))
+    df = pd.DataFrame({"clean_text": ["worried about my heart and chest", "lovely sunny morning"]})
+    cols = set(m._raw_feats(df).columns)
+    assert "f_body_part_rate" not in cols                    # also drops the somatic lexicon
+    assert not any(c.startswith("shai_") for c in cols)
+    assert "f_sent_compound" in cols and "f_first_sing_rate" in cols
+
+
 def test_raw_feats_pins_column_order():
     m = FusionMultiTaskModel(_cfg(extra={"fusion": {"enabled": True}}))
     df = pd.DataFrame({"clean_text": ["i am very anxious about my health today honestly"] * 4})
