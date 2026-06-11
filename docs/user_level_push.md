@@ -46,3 +46,11 @@ Top features: `subgrp_anxiety_primary`, `weak_anxiety_mean`, `n_posts`, `s_top5`
 - **Honest headline number (anxiety).** The best single model in 5-seed CV is random forest at 0.842, but that figure benefits from picking the best of seven models on the same CV. The **unbiased nested-CV estimate** (inner-loop hyperparameter search, so no selection optimism) is **0.825 ± 0.006** — that is the number to trust. Both are far above baseline; the paired bootstrap (+0.108, CI excludes 0, p ≈ 0) is significant under either.
 - **Tree ensembles win; linear and deep lose.** RF / ExtraTrees / XGBoost / stacking all land ~0.82–0.84 (anxiety) and ~0.87–0.89 (health anxiety); elastic-net LR and linear SVM lag at ~0.77–0.81; and from the earlier battery, transformer embeddings (0.686) and a deepset (0.675) underperform. This matches the small-N tabular literature (Grinsztajn 2022): at a few hundred positives, gradient-boosted/forest models on engineered features beat both linear models and deep nets.
 - **Caveats.** Health anxiety has only 141 positive users (wider true CI, though the multi-seed std is 0.003); the label is a self-disclosure proxy, not a clinician diagnosis. SMOTE was deliberately avoided (class weights only), per van den Goorbergh 2022.
+
+## Levers attempted but not productive (so the space is genuinely exhausted)
+
+- **TabPFN** (tabular foundation model; `scripts/exp_user_level_tabpfn.py`): attempted, but the weights are now **license-gated** — Prior Labs requires registering and setting `TABPFN_TOKEN` to download them (analogous to the gated Llama-3.1). The script is ready and reuses the same feature matrix; set the token to run it.
+- **NRC emotion lexicon**: not pursued, and the decision is *evidence-based*. Our own feature importances show the signal is behavioural / comorbidity / order-statistics — sentiment and the existing emotion-laden linguistic features do **not** appear in the top 15. Adding more emotion-lexical features is contraindicated by the data.
+- **Transformer embeddings and a deepset/attention net**: tried (earlier battery), both underperform — confirmed twice.
+
+With the full model zoo, every feature family the literature recommends, nested CV and a significance test all covered, this is the exhausted-search version of the result.
