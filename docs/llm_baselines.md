@@ -14,6 +14,8 @@ _Regenerate: `python scripts/exp_llm_baselines.py`_
 | mentallama-zeroshot | llm | 0.228 | 0.4718 | 0.5708 | eval subsample n=636 |
 | qwen-zeroshot | llm | 0.7817 | 0.8156 | 0.7426 | eval subsample n=636 |
 | qwen-qlora | llm | 0.9169 | 0.963 | 0.8894 | eval subsample n=636 |
+| llama31-zeroshot | llm | 0.642 | 0.6687 | 0.6021 | eval subsample n=636 |
+| llama31-qlora | llm | 0.9114 | 0.962 | 0.8862 | eval subsample n=636 |
 
 ![llm baselines](figures/llm_baselines.png)
 
@@ -23,4 +25,4 @@ _Regenerate: `python scripts/exp_llm_baselines.py`_
 - **QLoRA reaches parity, not dominance.** One epoch of 4-bit LoRA lifts the 7B model up to the best encoder's level (differences at n≈636 are within noise), but at 20-55x the parameters of MentalRoBERTa (125M) / RoBERTa-large (355M) — the small fine-tuned encoder remains the efficient choice. Fine-tuning, not prompting, closes the gap.
 - **Verbalizer caveat.** A zero-shot row with AUROC approximately 0.5 and a degenerate weighted-F1 reflects a prompt-format mismatch, not a capability measure: a model tuned for long-form answers and lacking a chat template (e.g. MentaLLaMA-chat-7B, a LLaMA-2-chat model fine-tuned on IMHI) is not elicited well by a yes/no next-token probe — it needs its native `[INST]...[/INST]` format or generate-and-parse decoding for a fair number.
 
-> _Llama-3.1-8B (zero-shot + QLoRA) is gated and was deferred pending HF access; re-run with `--models llama31-zeroshot,llama31-qlora` once granted._
+- **Llama-3.1-8B confirms the pattern (access now granted).** Zero-shot it scores 0.642 / 0.669 — it loses, even below Qwen2.5-7B zero-shot (verbalizer fit varies by model). After one epoch of QLoRA it reaches **0.911 / 0.962**, tying RoBERTa-large (0.916) and Qwen-QLoRA (0.917). An 8B model fine-tuned only *matches* a 125M encoder, at ~23x the parameters — the efficient-encoder conclusion holds across two independent 7-8B model families.

@@ -92,7 +92,9 @@ LLM_VARIANTS = {
     },
 }
 
-# Llama-3.1 is gated; omit from the default run until access is granted.
+# Llama-3.1 access has been granted and run (results in the CSV); it is kept out of
+# the DEFAULT run only because it is the most expensive — opt in via
+# `--models llama31-zeroshot,llama31-qlora`.
 DEFAULT_MODELS = "mentallama-zeroshot,qwen-zeroshot,qwen-qlora"
 
 
@@ -267,8 +269,9 @@ def main() -> None:
         "model fine-tuned on IMHI) is not elicited well by a yes/no next-token probe — it needs its "
         "native `[INST]...[/INST]` format or generate-and-parse decoding for a fair number.",
         "",
-        "> _Llama-3.1-8B (zero-shot + QLoRA) is gated and was deferred pending HF "
-        "access; re-run with `--models llama31-zeroshot,llama31-qlora` once granted._",
+        "- **Llama-3.1-8B confirms the pattern across a second model family.** Zero-shot it "
+        "loses (and even trails Qwen zero-shot); one epoch of QLoRA reaches the encoders' level. "
+        "An 8B model fine-tuned only matches a 125M encoder, at ~23x the parameters.",
     ]
     DOC.write_text("\n".join(md), encoding="utf-8")
 
