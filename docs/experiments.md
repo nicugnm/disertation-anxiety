@@ -423,6 +423,10 @@ The "biased" lexicon is the **best single signal** (κ 0.31), because it is buil
 
 All three improve significantly: anxiety paired bootstrap ΔAUROC **+0.108** (95% CI [+0.078, +0.139], p ≈ 0); depression gains the most (+0.21, where mean-pooling was weakest). The top features are precisely the research-predicted levers — bag-of-subreddits, comorbidity weak scores, order-statistics (`s_top5/p95/p90/frac70`), and temporal (`s_recency`, `ipi_std`) — not the naive mean. Tree ensembles dominate (≈0.82–0.89); linear models lag (~0.77–0.81); transformer embeddings and a deepset underperform — matching the small-N tabular-data literature (Grinsztajn 2022). Caveats: health anxiety has only 141 positive users; the label is a self-disclosure proxy; SMOTE deliberately avoided (class weights only, per van den Goorbergh 2022). Details in [user_level_push.md](user_level_push.md).
 
+### 14c — Validation: leakage check, ablation, DeLong, calibration
+
+`scripts/exp_user_level_ablation.py`. The obvious objection to a 0.84/0.89 user-level model is subreddit leakage. A feature-group ablation refutes it: removing the **entire bag-of-subreddits group** costs only −0.001 (anxiety), −0.003 (health anxiety), −0.004 (depression) AUROC, and **subreddit-only** scores 0.707 (below the 0.735 baseline). No single group is load-bearing — the win is their combination (each group alone reaches only 0.70–0.78; comorbidity is the largest single contributor, −0.010 leave-one-out). The gain is significant under **two** tests: paired bootstrap (anxiety +0.108 [0.077, 0.138]; HA +0.086 [0.046, 0.127]; depression +0.206 [0.176, 0.236]; all p≈0) and **DeLong's test** (anxiety z=7.15, p=8.5e-13). The model is already well-calibrated (Brier 0.059; Platt scaling leaves AUROC unchanged, as expected). Details in [user_level_ablation.md](user_level_ablation.md).
+
 ---
 
 ## What we used (concrete inventory)
