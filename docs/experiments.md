@@ -403,11 +403,11 @@ The "biased" lexicon is the **best single signal** (κ 0.31), because it is buil
 | MentalRoBERTa user embeddings (LR) | 0.686 |
 | deepset / attention over embeddings | 0.675 |
 | all combined (XGB) | 0.795 |
-| **linguistic + behavioural user features (XGBoost)** | **0.802 ± 0.005** |
+| **linguistic + behavioural + temporal features (XGBoost)** | **0.832 ± 0.005** |
 
 ![user level](figures/user_level.png)
 
-**A method finally beats the baseline — and it is not deep learning.** XGBoost over aggregated user features (post-score max/top-k/fraction + linguistic/SHAI mean/max/std + behavioural) reaches **0.802 ± 0.005** vs **0.735** for mean-pooling — a **+0.067** gain, stable across seeds. The wins come from *learned* aggregation (max/top-k beat the mean — a user is at-risk if *any* post is) and behavioural signal. Honestly, the heavier options *hurt*: frozen MentalRoBERTa embeddings (0.686), adding them to the feature model (0.795), and a deepset/attention net (0.675) all underperform — at this scale (258 positive users, median 5 posts) aggregated features + a gradient-boosted tree win. The earlier hierarchical null (§Experiment 11) was a label mismatch: it trained on weak any-post-positive labels and mean-pooled; training on the disclosure label and learning the aggregation fixes it. This is the project's clearest non-circular positive result. Details in [user_level.md](user_level.md).
+**A method beats the baseline, significantly — and it is not deep learning.** XGBoost over aggregated user features (post-score max/top-k/fraction + linguistic/SHAI + temporal/engagement/behavioural + multi-target comorbidity scores) reaches **0.832 ± 0.005** vs **0.735** for mean-pooling. A paired bootstrap (2000 resamples, same folds) gives ΔAUROC = **+0.093, 95% CI [+0.060, +0.126], p ≈ 0** — significant. The wins come from *learned* aggregation (max/top-k beat the mean — a user is at-risk if *any* post is), behavioural and **temporal** signal (posting burstiness), and **comorbidity** (a user's aggregated health-anxiety / suicidality / depression weak scores predict anxiety disclosure). Honestly, the heavier options *hurt*: frozen MentalRoBERTa embeddings (0.686), adding them to the feature model (0.795), and a deepset/attention net (0.675) all underperform — at this scale (258 positive users, median 5 posts) aggregated features + a gradient-boosted tree win. The earlier hierarchical null (§Experiment 11) was a label mismatch: it trained on weak any-post-positive labels and mean-pooled; training on the disclosure label and learning the aggregation fixes it. This is the project's clearest non-circular positive result. Details in [user_level.md](user_level.md).
 
 ---
 

@@ -94,6 +94,7 @@ def build_user_table(masked: pd.DataFrame, post_score: np.ndarray, emb: np.ndarr
         "author_hash": masked["author_hash"].values,
         "label": masked["user_anxiety"].values,
         "score": post_score,
+        "sub": masked["subreddit"].astype(str).values,
         "in_anx_sub": masked["subreddit"].astype(str).str.lower().isin(anx_subs).astype(int).values,
         "n_tok": feat["f_n_tokens"].values if "f_n_tokens" in feat else 0,
     })
@@ -108,7 +109,7 @@ def build_user_table(masked: pd.DataFrame, post_score: np.ndarray, emb: np.ndarr
         rec = {"author_hash": au, "label": int(g["label"].iloc[0]),
                "s_mean": s.mean(), "s_max": s.max(), "s_min": s.min(), "s_std": s.std(),
                "s_top3": top3, "s_frac_hi": float((s >= 0.5).mean()), "n_posts": len(s),
-               "n_subs": 0, "anx_sub_frac": float(g["in_anx_sub"].mean())}
+               "n_subs": int(g["sub"].nunique()), "anx_sub_frac": float(g["in_anx_sub"].mean())}
         rows.append(rec)
     udf = pd.DataFrame(rows).set_index("author_hash")
     # linguistic/SHAI aggregations: mean + max + std per user
@@ -123,6 +124,35 @@ def build_user_table(masked: pd.DataFrame, post_score: np.ndarray, emb: np.ndarr
         em.columns = [f"emb{c}_{stat}" for c, stat in em.columns]
         udf = udf.join(em, how="left")
     return udf.fillna(0.0)
+
+
+def rich_user_features(masked: pd.DataFrame) -> pd.DataFrame:
+    """Temporal, engagement, structural and multi-target user features (beyond text)."""
+    m = masked.copy()
+    m["t"] = pd.to_numeric(m["created_utc"], errors="coerce")
+    m["blen"] = m["clean_text"].astype(str).str.len()
+    rows = []
+    for au, g in m.groupby("author_hash"):
+        t = g["t"].dropna().sort_values().to_numpy()
+        span = float((t[-1] - t[0]) / 86400.0) if len(t) > 1 else 0.0
+        ipi = np.diff(t) / 86400.0 if len(t) > 1 else np.array([0.0])
+        vc = g["subreddit"].astype(str).value_counts(normalize=True).to_numpy()
+        ent = float(-(vc * np.log(vc + 1e-12)).sum())
+        rec = {"author_hash": au,
+               "span_days": span, "posts_per_day": len(g) / (span + 1.0),
+               "ipi_mean": float(ipi.mean()), "ipi_std": float(ipi.std()),
+               "sub_entropy": ent,
+               "eng_score_mean": float(g["score"].fillna(0).mean()) if "score" in g else 0.0,
+               "eng_score_max": float(g["score"].fillna(0).max()) if "score" in g else 0.0,
+               "eng_ncomm_mean": float(g["num_comments"].fillna(0).mean()) if "num_comments" in g else 0.0,
+               "blen_mean": float(g["blen"].mean()), "blen_std": float(g["blen"].std() if len(g) > 1 else 0.0),
+               "frac_self": float(g["is_self"].fillna(True).astype(int).mean()) if "is_self" in g else 1.0}
+        for k in ("weak_health_anxiety", "weak_depression", "weak_suicidality"):
+            if k in g:
+                v = g[k].astype(float).fillna(0.0)
+                rec[f"{k}_mean"] = float(v.mean()); rec[f"{k}_max"] = float(v.max())
+        rows.append(rec)
+    return pd.DataFrame(rows).set_index("author_hash").fillna(0.0)
 
 
 def cv_auroc(X, y, make_model, seeds, splits=5):
@@ -161,8 +191,9 @@ def main() -> None:
         emb = embed_posts(masked["clean_text"].tolist())
 
     udf = build_user_table(masked, post_score, emb)
+    udf = udf.join(rich_user_features(masked), how="left").fillna(0.0)   # temporal/engagement/structural/multi-target
     y = udf["label"].to_numpy().astype(int)
-    print(f"users: {len(y)} pos={int(y.sum())}", flush=True)
+    print(f"users: {len(y)} pos={int(y.sum())} | features: {udf.shape[1] - 1}", flush=True)
 
     feat_cols = [c for c in udf.columns if c not in ("label",)]
     emb_cols = [c for c in feat_cols if c.startswith("emb")]
@@ -228,6 +259,23 @@ def main() -> None:
         rows.append({"method": "deepset/attention (emb)", "auroc": round(au, 4), "auroc_std": round(sd, 4), "ap": round(apv, 4)})
         print(f"  deepset/attention AUROC {au:.4f} +/- {sd:.4f}", flush=True)
 
+    # --- significance: the winning XGBoost feature model vs the mean-score baseline ---
+    from src.evaluation.significance import paired_bootstrap
+    Xw = udf[score_cols + ling_cols].to_numpy(dtype=float)
+    skf = StratifiedKFold(5, shuffle=True, random_state=42)
+    oof_win = np.zeros(len(y))
+    for tr, te in skf.split(Xw, y):
+        mm = xgb(); mm.fit(Xw[tr], y[tr]); oof_win[te] = mm.predict_proba(Xw[te])[:, 1]
+    oof_base = udf["s_mean"].to_numpy(dtype=float)
+    sig = paired_bootstrap(y, oof_win, oof_base, metric="auroc", n_boot=2000)
+    print(f"  SIGNIFICANCE XGB-feats vs mean-score: dAUROC={sig['delta']:.4f} "
+          f"CI[{sig['ci_lo']:.4f},{sig['ci_hi']:.4f}] p={sig['p_value']:.4g}", flush=True)
+    pd.DataFrame({"author_hash": list(udf.index), "y": y, "winner": oof_win,
+                  "baseline": oof_base}).to_parquet("experiments/user_level_oof.parquet")
+    fm = xgb(); fm.fit(Xw, y)
+    imp = sorted(zip(score_cols + ling_cols, fm.feature_importances_), key=lambda t: -float(t[1]))[:12]
+    print("  top features:", ", ".join(f"{n}={v:.3f}" for n, v in imp), flush=True)
+
     out = pd.DataFrame(rows)
     OUTCSV.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(OUTCSV, index=False)
@@ -262,6 +310,14 @@ def main() -> None:
     for r in rows:
         md.append("| " + " | ".join(str(r.get(c, "")) for c in cols) + " |")
     md += ["", "![user level](figures/user_level.png)", "",
+           "## Significance and top features",
+           "",
+           f"Paired bootstrap (2000 resamples, same folds) of the XGBoost feature model vs the mean-score "
+           f"baseline: AUROC difference = **{sig['delta']:+.3f}** (95% CI [{sig['ci_lo']:+.3f}, {sig['ci_hi']:+.3f}], "
+           f"p = {sig['p_value']:.4g}). The improvement is statistically significant (CI excludes 0).",
+           "",
+           "Most important features (XGBoost gain): " + ", ".join(f"`{n}`" for n, _ in imp) + ".",
+           "",
            "## How to read this",
            "",
            "- Compare each method to the **mean_score baseline** (the ~0.74 mean-of-post-scores approach used "

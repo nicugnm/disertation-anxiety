@@ -1,10 +1,6 @@
 method,auroc,auroc_std,ap
 mean_score (baseline),0.7349,0.0,0.1754
-score_aggs (LR),0.7604,0.0031,0.1969
-user_feats ling+behav (XGB),0.8019,0.0045,0.248
-user_feats ling+behav (LR),0.7458,0.0072,0.2031
-embeddings (LR),0.686,0.0102,0.1438
-all: scores+feats+emb (XGB),0.7947,0.005,0.2284
-all: scores+feats+emb (LR),0.6948,0.0117,0.1538
+score_aggs (LR),0.7692,0.0027,0.2039
+user_feats ling+behav (XGB),0.8316,0.0048,0.3089
+user_feats ling+behav (LR),0.7671,0.007,0.2297
 tfidf_userdoc (LR),0.728,0.004,
-deepset/attention (emb),0.6747,0.0127,0.13

@@ -500,11 +500,11 @@ The masked self-disclosure user task is the **only** evaluation that can't be ga
 | mean-of-post-scores (baseline, prior ~0.74) | 0.735 |
 | MentalRoBERTa embeddings (LR) | 0.686 |
 | deepset/attention over embeddings | 0.675 |
-| **linguistic + behavioural features (XGBoost)** | **0.802 ± 0.005** |
+| **linguistic + behavioural + temporal features (XGBoost)** | **0.832 ± 0.005** |
 
 ![user-level](docs/figures/user_level.png)
 
-**A method finally beats the baseline by +0.067 AUROC — and it isn't deep learning.** XGBoost over aggregated user features (post-score **max/top-k**/fraction + linguistic/SHAI + behavioural) reaches **0.802**, multi-seed-stable. Mean-pooling discards exactly the signal that matters (a user is at-risk if *any* post is); transformer embeddings (0.686) and a deepset/attention net (0.675) actually *underperform* at this scale. The earlier hierarchical null was a label mismatch — training on the disclosure label and learning the aggregation fixes it. This is the clearest non-circular positive result in the project. ([docs/user_level.md](docs/user_level.md))
+**A method beats the baseline by +0.093 AUROC, and it's statistically significant — and it isn't deep learning.** XGBoost over aggregated user features reaches **0.832 ± 0.005**; a paired bootstrap (2000 resamples, same folds) gives ΔAUROC **+0.093, 95% CI [+0.060, +0.126], p ≈ 0** vs the mean-pooling baseline. Mean-pooling discards exactly the signal that matters (a user is at-risk if *any* post is); transformer embeddings (0.686) and a deepset/attention net (0.675) actually *underperform* at this scale. The top features are interpretable: fraction of posts in anxiety subreddits, posting volume, **comorbidity** (aggregated health-anxiety/suicidality/depression weak scores), the **top-k post score**, and **posting burstiness** (a temporal signal). The earlier hierarchical null was a label mismatch — training on the disclosure label and learning the aggregation fixes it. This is the clearest non-circular positive result in the project. ([docs/user_level.md](docs/user_level.md))
 
 ---
 
