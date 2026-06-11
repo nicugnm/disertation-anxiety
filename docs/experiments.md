@@ -409,6 +409,20 @@ The "biased" lexicon is the **best single signal** (κ 0.31), because it is buil
 
 **A method beats the baseline, significantly — and it is not deep learning.** XGBoost over aggregated user features (post-score max/top-k/fraction + linguistic/SHAI + temporal/engagement/behavioural + multi-target comorbidity scores) reaches **0.832 ± 0.005** vs **0.735** for mean-pooling. A paired bootstrap (2000 resamples, same folds) gives ΔAUROC = **+0.093, 95% CI [+0.060, +0.126], p ≈ 0** — significant. The wins come from *learned* aggregation (max/top-k beat the mean — a user is at-risk if *any* post is), behavioural and **temporal** signal (posting burstiness), and **comorbidity** (a user's aggregated health-anxiety / suicidality / depression weak scores predict anxiety disclosure). Honestly, the heavier options *hurt*: frozen MentalRoBERTa embeddings (0.686), adding them to the feature model (0.795), and a deepset/attention net (0.675) all underperform — at this scale (258 positive users, median 5 posts) aggregated features + a gradient-boosted tree win. The earlier hierarchical null (§Experiment 11) was a label mismatch: it trained on weak any-post-positive labels and mean-pooled; training on the disclosure label and learning the aggregation fixes it. This is the project's clearest non-circular positive result. Details in [user_level.md](user_level.md).
 
+### 14b — Exhaustive push (research-backed features + model zoo, all three targets)
+
+`scripts/exp_user_level_push.py`. Following a literature sweep (eRisk / CLPsych / Low 2020), I added the levers those systems use — **order-statistics + first-crossing** of the post scores, **circadian/temporal** features (night posting, hour & day-of-week entropy, burstiness, volume & risk-score slope, recency-weighting), a **reassurance/cyberchondria lexicon**, **bag-of-subreddits** participation, and **comorbidity** (the user's aggregated weak scores for the *other* conditions) — over a 7-model zoo (XGBoost, HistGBM, RandomForest, ExtraTrees, elastic-net LR, linear SVM, stacking), with **nested CV** for an unbiased estimate.
+
+| target | mean-pool baseline | best feature model | user-AUROC |
+|---|---:|---|---:|
+| anxiety | 0.735 | random forest | **0.842** (nested-CV unbiased **0.825 ± 0.006**) |
+| health anxiety *(thesis target)* | 0.799 | extra trees | **0.891** |
+| depression | 0.614 | stacking | **0.827** |
+
+![push](figures/user_level_push.png)
+
+All three improve significantly: anxiety paired bootstrap ΔAUROC **+0.108** (95% CI [+0.078, +0.139], p ≈ 0); depression gains the most (+0.21, where mean-pooling was weakest). The top features are precisely the research-predicted levers — bag-of-subreddits, comorbidity weak scores, order-statistics (`s_top5/p95/p90/frac70`), and temporal (`s_recency`, `ipi_std`) — not the naive mean. Tree ensembles dominate (≈0.82–0.89); linear models lag (~0.77–0.81); transformer embeddings and a deepset underperform — matching the small-N tabular-data literature (Grinsztajn 2022). Caveats: health anxiety has only 141 positive users; the label is a self-disclosure proxy; SMOTE deliberately avoided (class weights only, per van den Goorbergh 2022). Details in [user_level_push.md](user_level_push.md).
+
 ---
 
 ## What we used (concrete inventory)

@@ -493,18 +493,17 @@ After a committee flagged that the weak labels build in the researcher's own bia
 
 ### Experiment 14 — Beating the non-circular benchmark (a genuine positive result)
 
-The masked self-disclosure user task is the **only** evaluation that can't be gamed by lexicon circularity (independent self-report label, disclosure post hidden, subreddit-matched controls). Prior models all tied TF-IDF at ~0.74. Training **directly on the disclosure label** (author-disjoint user folds, 5 seeds) and learning the aggregation changes that (`scripts/exp_user_level.py`):
+The masked self-disclosure user task is the **only** evaluation that can't be gamed by lexicon circularity (independent self-report label, disclosure post hidden, subreddit-matched controls). Prior models all tied TF-IDF at ~0.74. Training **directly on the disclosure label** (author-disjoint user folds) and learning the aggregation changes that. An exhaustive, literature-grounded push (`scripts/exp_user_level_push.py`; features from eRisk / CLPsych / Low 2020) gives, across all three targets:
 
-| method | user-AUROC |
-|---|---:|
-| mean-of-post-scores (baseline, prior ~0.74) | 0.735 |
-| MentalRoBERTa embeddings (LR) | 0.686 |
-| deepset/attention over embeddings | 0.675 |
-| **linguistic + behavioural + temporal features (XGBoost)** | **0.832 ± 0.005** |
+| target | mean-pool baseline | best feature model | user-AUROC |
+|---|---:|---|---:|
+| **anxiety** | 0.735 | random forest | **0.842** *(nested-CV unbiased 0.825)* |
+| **health anxiety** *(the thesis target)* | 0.799 | extra trees | **0.891** |
+| **depression** | 0.614 | stacking | **0.827** |
 
-![user-level](docs/figures/user_level.png)
+![user-level push](docs/figures/user_level_push.png)
 
-**A method beats the baseline by +0.093 AUROC, and it's statistically significant — and it isn't deep learning.** XGBoost over aggregated user features reaches **0.832 ± 0.005**; a paired bootstrap (2000 resamples, same folds) gives ΔAUROC **+0.093, 95% CI [+0.060, +0.126], p ≈ 0** vs the mean-pooling baseline. Mean-pooling discards exactly the signal that matters (a user is at-risk if *any* post is); transformer embeddings (0.686) and a deepset/attention net (0.675) actually *underperform* at this scale. The top features are interpretable: fraction of posts in anxiety subreddits, posting volume, **comorbidity** (aggregated health-anxiety/suicidality/depression weak scores), the **top-k post score**, and **posting burstiness** (a temporal signal). The earlier hierarchical null was a label mismatch — training on the disclosure label and learning the aggregation fixes it. This is the clearest non-circular positive result in the project. ([docs/user_level.md](docs/user_level.md))
+**Significant, and it isn't deep learning.** For anxiety, a paired bootstrap (2000 resamples) gives ΔAUROC **+0.108, 95% CI [+0.078, +0.139], p ≈ 0** vs mean-pooling; the unbiased **nested-CV** estimate is **0.825 ± 0.006** (so 0.825–0.842 is the honest range). The top features are exactly what the literature predicted: **bag-of-subreddits** participation, **comorbidity** (the user's aggregated weak scores for the *other* conditions), **order-statistics** of the post scores (`top-k`, `p90/p95`, fraction-above-threshold — "any post is a red flag"), and **temporal** signal (recency, posting burstiness). Tree ensembles win (RF/ExtraTrees/XGB/stacking ≈ 0.82–0.89); elastic-net LR and linear SVM lag (~0.77–0.81); transformer embeddings (0.686) and a deepset (0.675) *underperform* — consistent with the small-N tabular literature. The first iteration (`scripts/exp_user_level.py`, single-target, 0.832) is superseded by this. This is the clearest non-circular positive result in the project. ([docs/user_level_push.md](docs/user_level_push.md))
 
 ---
 
