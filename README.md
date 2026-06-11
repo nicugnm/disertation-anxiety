@@ -491,6 +491,23 @@ After a committee flagged that the weak labels build in the researcher's own bia
 
 ---
 
+### Experiment 14 — Beating the non-circular benchmark (a genuine positive result)
+
+The masked self-disclosure user task is the **only** evaluation that can't be gamed by lexicon circularity (independent self-report label, disclosure post hidden, subreddit-matched controls). Prior models all tied TF-IDF at ~0.74. Training **directly on the disclosure label** (author-disjoint user folds, 5 seeds) and learning the aggregation changes that (`scripts/exp_user_level.py`):
+
+| method | user-AUROC |
+|---|---:|
+| mean-of-post-scores (baseline, prior ~0.74) | 0.735 |
+| MentalRoBERTa embeddings (LR) | 0.686 |
+| deepset/attention over embeddings | 0.675 |
+| **linguistic + behavioural features (XGBoost)** | **0.802 ± 0.005** |
+
+![user-level](docs/figures/user_level.png)
+
+**A method finally beats the baseline by +0.067 AUROC — and it isn't deep learning.** XGBoost over aggregated user features (post-score **max/top-k**/fraction + linguistic/SHAI + behavioural) reaches **0.802**, multi-seed-stable. Mean-pooling discards exactly the signal that matters (a user is at-risk if *any* post is); transformer embeddings (0.686) and a deepset/attention net (0.675) actually *underperform* at this scale. The earlier hierarchical null was a label mismatch — training on the disclosure label and learning the aggregation fixes it. This is the clearest non-circular positive result in the project. ([docs/user_level.md](docs/user_level.md))
+
+---
+
 ### Stronger encoders
 
 Does scaling the encoder beat the domain-pretrained MentalRoBERTa on the r/HealthAnxiety-vs-r/Anxiety task (Exp 8 setup, submissions-only, author-disjoint)? `scripts/exp_stronger_models.py`.
