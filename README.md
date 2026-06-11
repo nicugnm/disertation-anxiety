@@ -477,6 +477,20 @@ Do decoder-only LLMs beat a fine-tuned 125M encoder on the headline r/HealthAnxi
 
 ---
 
+### Experiment 13 — Bias & circularity analysis (the methodological contribution)
+
+After a committee flagged that the weak labels build in the researcher's own bias, I made that critique the subject of a three-part study that locates where the bias is — and isn't.
+
+**13a — the circularity tax** (`scripts/exp_circularity_ladder.py`). One TF-IDF model, evaluated against ever-more-independent labels: weak-label in-domain **0.990** → subreddit proxy 0.944 → expert ANGST 0.816 → masked self-disclosure 0.736 (AUROC). The ~0.17–0.25 drop the moment the label isn't lexicon-derived is the share of the headline that's circular, not clinical. ([docs/circularity_ladder.md](docs/circularity_ladder.md))
+
+**13b — keyword reliance** (`scripts/exp_lexical_ablation.py`). Delete every clinical-lexicon word from the HA-vs-Anxiety test text: F1 drops only ~0.05 for both TF-IDF (0.887→0.838, 5 seeds) and MentalRoBERTa (0.909→0.855). The task is **not** pure keyword-matching — a partial defence of the models. ([docs/lexical_ablation.md](docs/lexical_ablation.md))
+
+**13c — multi-source label model vs the single heuristic, anchored on experts** (`scripts/exp_label_model.py`). On ANGST, Cohen's κ with the 3 expert psychologists: the "biased" lexicon is the **best single signal** (κ 0.31, it's built from GAD-7/SHAI); sentiment, uncertainty and a **zero-shot LLM are near chance** (κ ≈ 0.03); an **unsupervised** Dawid–Skene combination can't beat the lexicon (κ 0.03); only a **supervised** combiner (a little expert data) edges ahead (**κ 0.353**). So the circularity is in the *evaluation*, not the lexicon's construct validity; an LLM is a weak anxiety annotator; and reducing the bias needs a little expert ground truth, not more unsupervised heuristics. ([docs/label_model.md](docs/label_model.md))
+
+**Net contribution:** a rigorous anatomy of label-circularity in weak-supervision mental-health NLP — a quantified circularity tax, a keyword-reliance probe, and a label-model study showing what does and doesn't reduce the bias.
+
+---
+
 ### Stronger encoders
 
 Does scaling the encoder beat the domain-pretrained MentalRoBERTa on the r/HealthAnxiety-vs-r/Anxiety task (Exp 8 setup, submissions-only, author-disjoint)? `scripts/exp_stronger_models.py`.

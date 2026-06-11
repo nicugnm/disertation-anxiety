@@ -338,6 +338,59 @@ The learned attention aggregator does **not** beat naive mean-pooling (mean wins
 
 ---
 
+## Experiment 13 — Bias and circularity analysis (the methodological contribution)
+
+After a student-session committee flagged that the weak labels build in the researcher's own bias, I made that critique the subject of a dedicated three-part study. Together the parts locate where the bias is — and where it is not.
+
+### 13a — The circularity ladder
+
+`scripts/exp_circularity_ladder.py`. One TF-IDF model, evaluated against test labels of decreasing dependence on our heuristic.
+
+| rung | test label | anxiety AUROC |
+|---|---|---:|
+| weak label, in-domain | subreddit prior + our lexicon | **0.990** |
+| subreddit proxy (HA vs Anxiety) | subreddit membership | 0.944 |
+| expert ANGST | 3 psychologists | 0.816 |
+| self-disclosure, masked | self-report (post hidden) | 0.736 |
+
+![circularity ladder](figures/circularity_ladder.png)
+
+The in-domain 0.990 falls to 0.74–0.82 the moment the test label is something the lexicon could not have produced. That **~0.17–0.25 AUROC gap is the circularity tax** — the share of the headline number that reflects recovering our own labelling heuristic rather than a clinical construct.
+
+### 13b — Lexical-ablation probe
+
+`scripts/exp_lexical_ablation.py`. Train on HA-vs-Anxiety, then re-test with every clinical-lexicon word/phrase removed from the text.
+
+| model | clean F1 | masked F1 | drop |
+|---|---:|---:|---:|
+| TF-IDF (5 seeds) | 0.887 | 0.838 | 0.050 |
+| MentalRoBERTa | 0.909 | 0.855 | 0.055 |
+
+![lexical ablation](figures/lexical_ablation.png)
+
+Removing the lexicon costs only ~0.05 F1 for both models — the task is **not** pure keyword-matching; most signal is in the surrounding language. So the subreddit-proxy result is not merely lexicon bias (a partial defence), even though the *label* circularity in 13a stands.
+
+### 13c — Multi-source label model vs the single heuristic (anchored on experts)
+
+`scripts/exp_label_model.py`. Diverse labelling functions on ANGST + an unsupervised Dawid–Skene combiner + a supervised combiner, all scored against the expert label (Cohen's κ).
+
+| source | κ vs experts | AUROC |
+|---|---:|---:|
+| lexicon (ours, "biased") | 0.310 | 0.779 |
+| sentiment (VADER) | 0.021 | 0.529 |
+| uncertainty (LIWC) | −0.024 | 0.504 |
+| LLM zero-shot (Qwen2.5-7B) | 0.031 | 0.577 |
+| Dawid–Skene (unsupervised) | 0.031 | 0.730 |
+| **supervised combo (5-fold)** | **0.353** | 0.777 |
+
+![label model](figures/label_model.png)
+
+The "biased" lexicon is the **best single signal** (κ 0.31), because it is built from clinical instruments (GAD-7/SHAI) — so the weak label is not noise about the construct. Sentiment, uncertainty and a zero-shot LLM are near chance (κ ≈ 0.03), so an **unsupervised** combination cannot beat the lexicon (with no ground truth it cannot tell which LF is reliable). Only a **supervised** combiner (a little expert data) edges ahead (κ 0.353). Three takeaways: the circularity is in the **evaluation**, not the lexicon's construct validity; a zero-shot LLM is a **weak anxiety annotator**; and reducing the bias needs a small amount of expert ground truth, not more unsupervised heuristics. (The human inter-rater ceiling could not be computed — ANGST ships only the aggregated expert label, not per-rater annotations.)
+
+**Net contribution.** A rigorous anatomy of label-circularity in weak-supervision mental-health NLP — a quantified circularity tax, a keyword-reliance probe, and a label-model study that shows where the bias lives and what does (and does not) reduce it.
+
+---
+
 ## What we used (concrete inventory)
 
 ### Models

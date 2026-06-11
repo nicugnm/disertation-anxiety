@@ -1,0 +1,8 @@
+source,coverage,kappa,f1,auroc
+"lexicon (ours, biased)",1.0,0.3096,0.5476,0.7792
+sentiment (VADER),0.952,0.0205,0.3902,0.5287
+uncertainty (LIWC),0.428,-0.0236,0.0982,0.5038
+llm (Qwen2.5-7B),1.0,0.0307,0.4061,0.5772
+majority vote,1.0,0.07,0.4258,0.7123
+label model (Dawid-Skene),1.0,0.0307,0.4061,0.7303
+supervised combo (5-fold),1.0,0.3529,0.5338,0.7769
