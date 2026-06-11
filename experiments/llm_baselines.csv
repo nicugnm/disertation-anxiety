@@ -9,3 +9,4 @@ qwen-zeroshot,llm,0.7817,0.8156,eval subsample n=636,0.7426
 qwen-qlora,llm,0.9169,0.963,eval subsample n=636,0.8894
 llama31-zeroshot,llm,0.642,0.6687,eval subsample n=636,0.6021
 llama31-qlora,llm,0.9114,0.962,eval subsample n=636,0.8862
+mentallama-generate,llm,0.228,0.5,eval subsample n=636,0.5708

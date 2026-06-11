@@ -73,6 +73,11 @@ class HfCausalLmModel(BaseModel):
         # (for LLaMA-2-chat models like MentaLLaMA that ship without a chat_template);
         # "plain" = system + prompt + "Answer:".
         self._prompt_style = e.get("prompt_style", "auto")
+        # "verbalizer" = next-token P(yes)/P(no) (continuous, default); "generate" =
+        # let the model write its natural answer and parse a verdict (fair for
+        # generation-tuned models like MentaLLaMA whose first token is not a yes/no).
+        self._decode_mode = e.get("decode_mode", "verbalizer")
+        self._gen_max_new = int(e.get("gen_max_new_tokens", 40))
         # 4-bit only makes sense on CUDA; disabled automatically on CPU (tests).
         self._want_4bit = bool(e.get("load_in_4bit", True))
         lora = e.get("lora", {}) or {}
@@ -198,6 +203,8 @@ class HfCausalLmModel(BaseModel):
 
         tok = self._tok
         texts = df[self.config.text_field].astype(str).fillna("").tolist()
+        if self._decode_mode == "generate":
+            return self._generate_scores(texts)
         scores: list[float] = []
         tag = self._pretrained.split("/")[-1]
         for i in tqdm(range(0, len(texts), self._batch_size),
@@ -210,6 +217,45 @@ class HfCausalLmModel(BaseModel):
                 logits = self._model(**enc).logits[:, -1, :].float().cpu()
             scores.extend(self._scores_from_logits(logits, self._yes_ids, self._no_ids).tolist())
         return np.asarray(scores, dtype=float)
+
+    @staticmethod
+    def _parse_verdict(text: str) -> float:
+        """Parse a generated answer into 1.0 (yes) / 0.0 (no) / 0.5 (unclear).
+        Uses the first clear yes/no-like token; falls back to affirmation synonyms."""
+        import re
+
+        t = text.lower()
+        yes = re.search(r"\b(yes|present|positive|health anxiet|hypochondr)\b", t)
+        no = re.search(r"\b(no|not present|absent|negative|general anxiet)\b", t)
+        yi = yes.start() if yes else 10 ** 9
+        ni = no.start() if no else 10 ** 9
+        if yi == ni == 10 ** 9:
+            return 0.5
+        return 1.0 if yi < ni else 0.0
+
+    def _generate_scores(self, texts: list[str]) -> np.ndarray:
+        """Generate-and-parse: let the model write its answer, parse a hard verdict.
+        Returns scores in {0.0, 0.5, 1.0} — a hard label, so report F1/accuracy
+        (AUROC is coarse). The fair number for a generation-tuned model."""
+        import torch
+        from tqdm.auto import tqdm
+
+        tok = self._tok
+        out: list[float] = []
+        tag = self._pretrained.split("/")[-1]
+        for i in tqdm(range(0, len(texts), self._batch_size),
+                      desc=f"gen[{self.target}] {tag}", unit="batch"):
+            chunk = [self._format(t) for t in texts[i : i + self._batch_size]]
+            enc = tok(chunk, return_tensors="pt", padding=True, truncation=True,
+                      max_length=self._max_length)
+            enc = {k: v.to(self._model.device) for k, v in enc.items()}
+            with torch.no_grad():
+                gen = self._model.generate(**enc, max_new_tokens=self._gen_max_new,
+                                           do_sample=False, pad_token_id=tok.pad_token_id)
+            new = gen[:, enc["input_ids"].shape[1]:]
+            for row in new:
+                out.append(self._parse_verdict(tok.decode(row, skip_special_tokens=True)))
+        return np.asarray(out, dtype=float)
 
     @staticmethod
     def _scores_from_logits(logits, yes_ids: list[int], no_ids: list[int]) -> np.ndarray:

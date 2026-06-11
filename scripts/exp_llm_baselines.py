@@ -73,6 +73,11 @@ LLM_VARIANTS = {
         "lora": {"enabled": False}, "load_in_4bit": True,
         "prompt_style": "llama2",   # LLaMA-2-chat format (no chat_template shipped)
     },
+    "mentallama-generate": {  # fair number: generate-and-parse, not the yes/no verbalizer
+        "pretrained": "klyang/MentaLLaMA-chat-7B",
+        "lora": {"enabled": False}, "load_in_4bit": True,
+        "prompt_style": "llama2", "decode_mode": "generate",
+    },
     "qwen-zeroshot": {        # strong open general instruct model
         "pretrained": "Qwen/Qwen2.5-7B-Instruct",
         "lora": {"enabled": False}, "load_in_4bit": True,
@@ -268,6 +273,12 @@ def main() -> None:
         "for long-form answers and lacking a chat template (e.g. MentaLLaMA-chat-7B, a LLaMA-2-chat "
         "model fine-tuned on IMHI) is not elicited well by a yes/no next-token probe — it needs its "
         "native `[INST]...[/INST]` format or generate-and-parse decoding for a fair number.",
+        "- **MentaLLaMA, given its fair shot, still does not discriminate.** With `decode_mode='generate'`, "
+        "a yes/no prompt makes it answer \"Yes\" to nearly every post and a forced health-vs-general prompt "
+        "makes it answer \"General\" to nearly every post -- even when its own reasoning correctly identifies "
+        "health anxiety. Its verdict token is decoupled from its reasoning and biased regardless of framing; "
+        "it is an IMHI distress-screener, not a fine-grained HA-vs-anxiety classifier (the `mentallama-generate` "
+        "row is the generate-and-parse number).",
         "",
         "- **Llama-3.1-8B confirms the pattern across a second model family.** Zero-shot it "
         "loses (and even trails Qwen zero-shot); one epoch of QLoRA reaches the encoders' level. "
